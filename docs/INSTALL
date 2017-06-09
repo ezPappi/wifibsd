@@ -1,0 +1,10 @@
+By yazzy@yazzy.org
+Last change Wed Mar 30 15:27:19 UTC 2005
+
+go to /some/dir/wifibsd/branches/current/
+then do `../../../bin/wifibsd.sh`
+then do `../../../bin/mkimage.sh`
+then do `../../../bin/mkcdrom.sh`
+
+
+You can also put the bin path of your developement dir to your shell's PATH.

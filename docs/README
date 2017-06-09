@@ -1,0 +1,54 @@
+
+# README v1
+
+Q:	What is WifiBSD?
+A:	WifiBSD is FreeBSD (Make no mistake about this).
+	WifiBSD is not a fork of FreeBSD.
+	WifiBSD is similar to PicoBSD.
+	WifiBSD is simply a smaller release of FreeBSD with a focus on being a wireless appliance.
+
+
+WifiBSD was originally based on MiniBSD (also FreeBSD) by Manuel Kasper <mk@neon1.net>, but WifiBSD has
+since evolved beyond the confines of MiniBSD into a distinct project. Rather than being a manual
+process of reducing FreeBSD by following instruction, we automate the process with shell scripts. The
+process of scripting the MiniBSD process has rendered a system much more akin to PicoBSD by Dr. Luigi
+Rizzo <luigi@iet.unipi.it>, et'all. WifiBSD is designed to work with current versions of FreeBSD and
+does not work with anything prior to FreeBSD 5.1-RELEASE.
+
+
+Reductive Vs Additive
+
+WifiBSD depends on your presently installed FreeBSD system to build the image. It is a reductive
+process of miniaturization as opposed to an additive process. What that means is a reductive process
+starts as a full FreeBSD system, and reduces it to only the minimum parts required to function.
+An additive system is more akin to PicoBSD where you must build all the parts of your system from
+the ground up.
+
+
+Dynamic Vs Static.
+
+In addition to removing unnecessary files, it is also ideal to remove unnecessary bulk from the
+remaining executable by dynamically linking all code that can be shared amongst them. FreeBSD has two
+make.conf(5) methods to achieve this. The WITH_DYNAMICROOT=YES variable is a safe way
+to build your system with dynamic executables, but it only applies to /bin and /sbin, which leaves some
+files statically compiled under /usr. The NOSHARED=NO variable causes everything in the FreeBSD sources
+to be dynamically built, but this can cause some problems if you do not use the previous variable in
+conjunction, or your /usr/lib is on a different filesystem from your /sbin/init file. It is recommended
+that you enable both options in your /etc/make.conf. You should note that WITH_DYNAMICROOT option is
+only available in -CURRENT versions of FreeBSD 5.1.
+
+
+The build environment.
+
+You can use any FreeBSD 5.1 (or later) system to build the WifiBSD image, but a laptop computer is
+ideal because those contain the pccard slots, which allow you to install WifiBSD a Compact Flash device
+much more easily than attaching an external CF reader to a desktop computer. However, it is possible to
+build the WifiBSD image on your fast desktop system, and then install the image via your slower laptop
+computer (which is what the WifiBSD developers do).
+
+
+Advantages of jail(8)
+
+You might consider taking advantage of FreeBSD's jail(8) facility to create an environment that you
+have no problem corrupting. The reason for this is because WifiBSD is best when using all dynamically
+linked executables, and you probably do not want that on your important computer.

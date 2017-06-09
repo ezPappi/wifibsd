@@ -1,0 +1,441 @@
+<h3><li>Introduction.</h3>
+
+This HowTo describes the way of installing wifiBSD which supports the latest Atheros chips.
+At the point of writing this HowTo support for atheros cards is avaliable in FreeBSD 5.1-CURRENT > only.
+<br>Firstly we need to cvsup to get the latest sources and drivers of FreeBSD.
+<br>We will need to create a virtual environment - jail.
+<br>The purpose of it is we can have one main FreeBSD system running -RELEASE or STABLE version and one jailed/virtual  
+version of Freebsd inside our actual system with the newest sources.  
+<br>We'll also be overwriting some binaries of the base system with our custom, tuned binaries and it's much saver to do that in a "sandbox".
+
+<h3><li>Preparing your soekris board.</h3>
+
+Firstly we need to set up the soekris board.
+<br>Install minicom , start it up and press CTRL A and then O (still keeping the CTRL button pressed).
+<br>Scroll down to Serial port setup and then set the Bps/Par/Bits to 19200 8N1 (Press E) and set Hardware Flow Control to No (Press F).
+<br>Soekris boards use 19200 Bits as default. 
+<br>Now we need to change that value to 9600. 
+<br>When your 45xx starts to boot, press Ctl-P to stop the boot process and get to the BIOS command prompt.  
+<br>Now type set ConSpeed=9600.
+<br>Set up the rest accoridingly:
+Recommended BIOS settings for the net45xx
+<pre>
+ConSpeed = 9600
+ConLock = Enabled
+BIOSentry = Disabled
+PCIROMS = Disabled
+PXEBoot = Disabled
+FLASH = Primary
+BootDelay = 2
+BootPartition = Disabled
+ShowPCI = Enabled
+</pre>
+You may also set correct date, i.e date 2003/08/14
+<br>
+<h3><li>Installing jailed environment.</h3>
+
+<br>Firstly we need to build a new jail for our wifiBSD.
+<br>Get down fresh FreeBSD sources with cvsup and run this script. 
+<br>Adjust it if needed:
+<pre>
+#!/bin/sh
+# jailsetup.sh version 0.1
+# Jail setup script for wifiBSD based on FreeBSD 5.1 > by yazzy@ezunix.org
+
+email="yazzy@ezunix.org"        # Whom to notice.
+wifibsd="$D/usr/wifibsd"        # Installation dir of wifiBSD
+
+if [ x"$1" = x ]
+then
+   echo Usage: jailsetup.sh [dir]
+   echo example: jailsetup.sh /usr/jail
+   exit
+fi
+
+echo
+echo It is your last chance to abort the process.
+echo Press Enter to proceed or CTRL + C to abort
+read ANYKEY
+
+D=$1
+
+if [ -f $D ]
+then
+   echo Error. A file has the same name as the destination directory.
+   echo Please remove $D first.
+   exit
+fi
+
+if [ ! -d $D ]; then
+   echo The directory $D did not exist. We will create it now.
+   /bin/mkdir -p $D
+   sleep 3
+   echo $D Created. Proceeding...
+
+else
+   echo Checking if the $D directory exists. It will be created if not.
+   echo Looks ok. Proceeding...
+fi
+
+# Do the code crunching
+cd /usr/src
+make world DESTDIR=$D
+cd etc
+make distribution DESTDIR=$D
+mount_devfs devfs $D/dev
+cd $D
+ln -sf dev/null kernel
+
+#Create some system files
+touch $D/etc/fstab
+cp /etc/resolv.conf $D/etc/resolv.conf                                      
+cp /etc/localtime  $D/etc/localtime
+
+#       Let us create directory tree for the whole wifiBSD
+if [ ! -d ${wifibsd} ]; then mkdir -p ${wifibsd} ;
+        mkdir $wifibsd/bin $wifibsd/dev $wifibsd/mnt $wifibsd/modules $wifibsd/proc $wifibsd/root $wifibsd/sbin $wifibsd/var
+        mkdir -p $wifibsd/boot/defaults
+        mkdir -p $wifibsd/etc/defaults $wifibsd/etc/mtree $wifibsd/etc/namedb $wifibsd/etc/ppp $wifibsd/etc/ssh $wifibsd/etc/ssl
+        mkdir -p $wifibsd/usr/bin $wifibsd/usr/lib/aout $wifibsd/usr/libexec $wifibsd/usr/local $wifibsd/usr/share/misc
+	ln -s /var/tmp/ $wifibsd/tmp
+fi
+
+echo
+echo "Build of wifiBSD finished at `date +%d%m%Y` !" | mail -s "jail build of wifiBSD complete: `date +%d%m%Y`" $email
+</pre>
+
+When you're done, run:
+
+<pre>
+# chroot /usr/jail
+</pre>
+
+Modify the "set prompt" line in /usr/jail/root/.cshrc if you want to be reminded of the fact that you're inside the jail
+by the shell prompt:
+<pre>
+# set prompt = "wifiBSD %~ %# "
+</pre>
+
+Still in chrooted env, edit your /etc/rc.conf
+<pre>
+network_interfaces=""
+sendmail_enable="NONE"
+inetd_enable="YES"
+inetd_flags="-wW -a 10.0.0.1"
+rpcbind_enable="NO"
+hostname="jail.wifiBSD.org"
+cron_enable="NO"
+syslogd_enable="NO"
+portmap_enable="NO"
+sshd_enable="YES"
+</pre>
+
+<b>Note:</b> The IP which inetd will bind to is the same IP which is/will be used by your jail setup.
+<br>Now edit your /etc/ssh/sshd_config and change #ListenAddress 0.0.0.0 to ListenAddress 10.0.0.1
+<br>Change also #PermitRootLogin no to PermitRootLogin yes. This is for us to be able to login to our jail enviroment from our host.
+<br>Now you can logout from your jail system and create an IP alias for your nic:
+<pre>
+# ifconfig fxp0 inet 10.0.0.1 netmask 255.255.255.255  
+</pre>
+Change your /etc/rc.conf to make the IP alias permanent by adding following line:
+<pre>
+ifconfig_fxp0_alias0="inet 10.0.0.1 netmask 255.255.255.255"
+</pre>
+Edit the /etc/ssh/sshd_config file being still outside of the jail and bind ssh to your actual IP, the same way as above.
+<br>Run killall -HUP sshd.
+<br>Create a startup file for our jail in /usr/local/etc/rc.d/ and call it i.e jail.sh
+<pre>
+#! /bin/sh
+/sbin/mount_devfs devfs /usr/jail/dev/
+/usr/sbin/jail /usr/jail jail 10.0.0.1  /bin/sh /etc/rc
+</pre>
+Now run chroot /usr/jail again.
+<br>Run sh /etc/rc to start and check things. You will also see public/private being generated.
+<br>Set root's pass running passwd root.
+<br>Log out and run  /usr/local/etc/rc.d/jail.sh
+<br>Now you should be able to ssh in to your jail as root. The point in doing this is you cannot su - in jail enviroment. 
+<br>One could of course run sudo.
+<br>Login to your jail and run cvsup command to get down the source tree of FreeBSD.
+<br>
+<h3><li>Making the directory tree.</h3>
+<br>
+We'll put together our whole wifiBSD installation in one directory, 
+<br>so in the end we could theoretically just copy everything from that directory over to the flash card. 
+<br>I'll leave it up to you where you're going to create this directory; 
+<br>mine is /usr/local/wifibsd and the rest of the guide assumes that yours is, too (just make sure you got about 100 MB of space left on the partition where you
+create it). 
+<br>That done, we need to populate this directory with some standard subdirectories (bin, dev, etc, usr, and so on). 
+<br>You could use mtree to populate it with empty directories, but I prefer to do it manually. 
+<br>Here is the tree of directories you have to mkdir:
+<pre>
+.
+|-- bin
+|-- boot
+|   `-- defaults
+|-- dev
+|-- etc
+|   |-- defaults
+|   |-- mtree
+|   |-- namedb
+|   |-- ppp
+|   |-- ssh
+|   `-- ssl
+|-- mnt
+|-- modules
+|-- proc
+|-- root
+|-- sbin
+|-- tmp -> /var/tmp
+|-- usr
+|   |-- bin
+|   |-- lib
+|       `-- aout
+|   |-- libexec
+|   |-- local
+|   |-- sbin
+|   `-- share
+|       `-- misc
+`-- var
+</pre>
+
+Permissions are 0755 (root.wheel) for all directories except /proc (0555). You may also want to chmod 0700 /root, but that is a matter of personal
+taste. :)
+Don't forget the link from /tmp to /var/tmp - it's important as the root file system will later be mounted read-only (we'll provide a memory file
+system for /var).
+<br>
+<h3><li>Rebuilding the boot loader.</h3>
+The net4501 BIOS seems to have a little bug in its serial console emulation - if you boot a standard FreeBSD bootloader on it, it will spread the
+characters (e.g. the "swoosh" (- \ | / - ...) all over your terminal. When the kernel boots, things are normal again, but it may be important to see
+the error messages in case the bootloader cannot boot the kernel. To fix this, we have to recompile the boot loader (don't worry, it's easy and quick).
+<br>
+<b>Note:</b> you'll need to have the developer distribution installed on your base system to recompile the boot loader - just the kernel sources is not
+sufficient. You can install the developer distribution with /stand/sysinstall. If you can't/don't want to recompile the boot loader, you can download a
+precompiled boot loader (for 5.1-CURRENT) <a href="index.php">here</a>. gunzip it and throw it in /boot/loader. Don't forget to chmod 555 it.
+<br>
+Edit <b>/sys/boot/i386/libi386/Makefile</b> and comment out the line that reads:
+<pre>
+CFLAGS+= -DTERM_EMU
+</pre>
+Leave the editor, and run:
+<pre>
+# cd /sys/boot 
+# make clean && make && make install 
+</pre>
+Of course this will also change the boot loader of your base FreeBSD system to not use terminal emulation, but that doesn't hurt much.
+<br><br><b>Importand!</b> Set CPUTYPE=i486 in your /etc/make.conf for soekris boards!</b> Otherwise your loader will compile for pentium architecture and soekris will never boot.
+<br>
+
+<h3><li>Dynamic vs. static executables</h3>
+<br>
+In a normal FreeBSD installation, the binaries in /bin and /sbin are linked statically, which means they do not depend on any libraries in order to work. 
+<br>This makes them much bigger, though, and you can save several MBs (about 6.7 MB with my binary set) by linking them dynamically, too. 
+<br>Since we keep everything on one partition, they would still be usable in single-user mode because the libraries are available. 
+<br>The only disadvantage is that if your libraries get
+corrupted, you won't be able to do much on the system to fix it. 
+<br>Decide for yourself whether you want them to be dynamically linked. If you do, edit /etc/make.conf and add the line
+<pre>
+NOSHARED=no
+</pre>
+to it. Then cd to /usr/src/bin and type make clean && make && make install. Do the same for /usr/src/sbin. Voila`.
+
+NOTE: if you actually run "make install" with NOSHARED=no set on a real FreeBSD system (not in a jail as explained in chapter 1.1), you should really make
+sure that your /usr directory is in your root partition (not in a separate partition). Otherwise your next reboot will fail horribly because /sbin/init is
+linked dynamically but the required libraries can't be found (since the other partitions are not mounted at that time, yet).
+
+If you feel like saving another 400 KB (with my binary set), you can do the same for /usr/src/usr.bin, because a few binaries in there (bzip2, gzip and tar
+among others) are also linked statically by default.
+<br>
+
+<h3><li>Copying the binaries over.</h3>
+</pre>
+I made a little shell script that reads a
+file which lists all the necessary binaries and copies them over, recreating the proper hard links in the process (for example, /bin/ln and /bin/link are the
+same file, but if you copy them over with cp, you end up with two copies of ln/link on your wifiBSD file system, thus wasting a lot of space).
+<br>
+Get <a href="files/wifibsd.sh">wifibsd.sh</a>, <a href="files/wifibsd.subr">wifibsd.subr</a> and my list of binaries, <a href="files/wifibsd.files">wifibsd.files</a>. 
+<br>Now edit the variables if needed and execute wifibsd.sh 
+<pre>
+# ./wifibsd.sh
+</pre>
+
+wifibsd.sh will read the list of files in wifibsd.files and copy them from your system in / into your wifiBSD root file system in /usr/wifibsd. My file list
+contains a reasonable amount of binaries tuned to sacrifice the least amount of functionality for my purpose, but still fit well on a CF card. Things like
+perl and sendmail are missing, however, because I don't really need them. If you do, change wifibsd.files to reflect your requirements.
+<br>
+If you feel like saving almost 200 KB, you can copy the stripped-down termcap file from PicoBSD over the standard /usr/wifibsd/usr/share/misc/termcap file.
+You'll find the replacement file in /usr/src/release/picobsd/mfs_tree/etc/termcap. The standard termcap file contains many terminal types that you probably
+won't use anyway. There's also a stripped services file in /usr/src/release/picobsd/mfs_tree/etc/services. (suggested by Stuart Henderson)
+<br>
+<h3><li>Making the kernel.</h3>
+<pre>
+# cd /sys/i386/conf
+# config WIFIBSD
+# cd /sys/i386/compile/WIFIBSD 
+# make depend && make
+</pre>
+When it's done, you should have your kernel. We will now install it gzipped to save even more space:
+<pre>
+# gzip -9 kernel
+# mkdir -p /usr/wifibsd/boot/kernel
+# cp kernel.gz /usr/wifibsd/boot/kernel
+</pre>
+
+<h3><li>Copying the libraries</h3>
+<br>
+We did not copy all the essential libraries in /usr/lib yet. These are not listed in wifibsd.files because the list of required libraries depends on which
+binaries you have installed. In an earlier version of this guide, we would just copy all libraries in /usr/lib and then remove those that we were sure would
+not be required (e.g. *.a). That still left a lot of unnecessary libraries (about 5.9 MB with FreeBSD 4.6) lying around. If you use my file list
+(wifibsd.files), the libraries that are absolutely necessary weigh in at 3.2 MB - so that means another 2.7 MB saved.
+
+<br>
+I wrote a script, wifibsd.sh (the same one as above), which walks through your wifiBSD tree and uses ldd on all binaries to extract a list of only those
+libraries that are required for at least one binary in your wifiBSD system. Every requiered library was copied over then we run it the first time.
+<br>
+The only libraries that are still missing now are the PAM modules. Doing a
+<pre>
+cp -p /usr/lib/pam* /usr/wifibsd/usr/lib
+</pre>
+should fix that. If you don't want all PAM modules (you probably won't need Kerberos modules, for example), you should copy at least pam_deny, pam_permit,
+pam_unix, pam_login_access and pam_nologin.
+<br>Finally, if you mkdir /usr/wifibsd/usr/lib/aout, you will avoid the warning message that appears otherwise.
+<br>
+That's it. Our libraries directory has been populated.
+<br>
+<h3><li>Populating /etc</h3>
+<br>
+
+Edit your /etc/rc.conf
+<pre>
+hostname="wifibsd.wrs.no"
+ifconfig_sis0="192.168.64.7 netmask 255.255.255.0"
+kern_securelevel_enable="NO"
+nfs_reserved_port_only="YES"
+sendmail_enable="NONE"
+sshd_enable="YES"
+usbd_enable="NO"
+inetd_enable="NO"
+portmap_enable="NO"
+diskless_mount="/etc/rc.d/diskless"
+update_motd="NO"
+varsize=8192
+</pre>
+
+For FreeBSD 5.1 you have to edit /etc/rc.d/diskless to remove the check for an NFS mount.
+<br>Comment out following lines:
+<pre>
+#dlv=`/sbin/sysctl -n vfs.nfs.diskless_valid 2> /dev/null`
+#[ ${dlv:=0} -eq 0 ] && exit 0
+</pre>
+
+Don't forget to edit /etc/newsyslog.conf to rotate log files more often and don't archive them. You probably won't want much logging anyway, since all your
+log files will be lost when you reboot your machine.
+
+.
+.
+.
+<h3><li>Tar'ing everything up.</h3>
+<br>
+Because of the aforementioned inability of cp to reproduce hard links, we'll build a tar archive of our whole wifiBSD installation. Do the following:
+<pre>
+# cd /usr/wifibsd
+# tar cfvz /usr/wifibsd-0.1.tgz *
+</pre>
+Of course, the name of the .tgz file is a matter of personal taste. 
+<br>When it's done, you'll be left with a .tgz file that contains everything (well, almost) for your wifiBSD.
+
+<br>
+<h3><li>Generating the flash image.</h3>
+<br>
+Although we could use the CF card like a hard disk, disklabel and newfs it and explode our tar archive directly on it, I feel it's easier and faster to do
+that task in a disk image and dd that directly onto the flash card - besides, it prolongs the life of the CF card by writing every sector only once.
+<br>
+We'll use vnconfig to get a virtual disk that we can disklabel. You will have to know the size of your flash card in sectors (512 byte units), but you cannot
+figure this out without actually connecting the card to your machine (see the beginning of the next section for information on how to do this). Once you got
+it connected, use the following command to find out the number of sectors:
+<pre>
+# bsdlabel -rwn ad[n] auto | grep sectors/unit
+</pre>
+...of course substituting the proper device number of your flash card for [n].
+<br>
+Hint: if disklabel reports errors like "No space left on device", try the following command first:
+<pre>
+# dd if=/dev/zero of=/dev/ad[n] bs=1k count=20
+</pre>
+This will erase any partition information that may already be present on the CF card.
+<br>
+Now we'll create a disk image of the same size, initially filled with zeroes:
+<pre>
+# dd if=/dev/zero of=/usr/wifibsd-disk.bin bs=512 count=[number of sectors on your flash card]
+# dd if=/dev/zero of=/usr/wifibsd-disk.bin bs=512 count=35000
+</pre>
+Let's use this disk image file as a vn device so we can disklabel it:
+<pre>
+# mdconfig -a -t vnode -u 0 -f /usr/wifibsd-disk.bin
+</pre>
+Our new virtual disk has to be partitioned and the file system created. Use:
+<pre>
+# bsdlabel -Brw md0 auto
+# bsdlabel -e md0
+</pre>
+You'll be dropped into your editor. Find the line that starts with c: and duplicate it, changing the c: to a: and the fstype to 4.2BSD. This is our root
+partition, which will span over the whole slice. If you want a second partition (e.g. for configuration information), reduce the size of the a: slice by the
+amount of space you want for your second partition, then make another line starting with e:, an offset equal to the size of a:, and a size equal to what you
+subtracted from a:. Save.
+Example of how my partitions look like:
+<pre>
+# /dev/md0:
+8 partitions:
+#        size   offset    fstype   [fsize bsize bps/cpg]
+  a:    64256        0    4.2BSD        0     0                                 
+  c:    64256        0    unused        0     0         # "raw" part, don't edit
+</pre>
+Note that we don't have a swap partition - there's nowhere to put it. You can't put swap partitions on your flash card - it's way too slow and would soon ruin
+your card. So you better make sure that you've got enough memory for your applications...
+<br>
+Now let's newfs and mount our partition:
+<pre>
+# newfs -b 8192 -f 1024 -U /dev/md0a
+# mount /dev/md0a /mnt
+</pre>
+(if you made a second partition earlier on, don't forget to newfs that one, too). So we got our virtual disk mounted on /mnt, and we're now ready to explode
+our .tgz onto it:
+<pre>
+cd /mnt
+tar xfvzP /usr/wifibsd.tgz
+</pre>
+That's it. Let's clean up:
+<pre>
+# cd /
+# umount /mnt
+# mdconfig -d -u 0
+</pre>
+And the following config file:
+<pre>
+/etc/defaults/pccard.conf
+</pre>
+And add the following lines to it:
+<pre>
+# Atheros reference design a/b/g card
+card "Atheros Communications, Inc." "AR5001-0000-0000"
+        config  auto "ath" ?
+        insert  /etc/pccard_ether $device start
+        remove  /etc/pccard_ether $device stop
+</pre>
+Thanks to Rudi van Drunen for that info.
+
+<h3><li>Copying everything to the flash card.</h3>
+<br>
+This is a bit tricky. You could netboot (with PXE) your net4501 with the CF card installed and copy everything over the network, but preparing a bootable FreeBSD
+for this purpose isn't quite simple, either. 
+<br>You'll need some kind of adapter in order to connect your CF card to your base system. 
+<br>If your base system is a notebook, you can use a CF -> PCMCIA adapter (enable pccardd and you'll see the card as an ATAPI device, like for example ad8) or a
+CF -> IDE adapter if it's a desktop machine. 
+<br>Either way, you'll end up with an ad[n] device that represents the CF card (it behaves like an IDE hard disk).
+<br>
+We can now simply transfer the disk image we created in the previous step block-by-block onto our flash card:
+<pre>
+# dd if=wifibsd-0.1.bin of=/dev/ad[n] bs=8k
+</pre>
+(make sure you get the value for [n] right in this command or you might erase your hard disk!!!)
+<br>
+If you want to see the progress, type Ctrl-T.

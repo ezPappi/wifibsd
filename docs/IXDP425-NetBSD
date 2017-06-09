@@ -1,0 +1,34 @@
+How to compile kernel for Intel's IXDP425
+for Avila GW2348-4 Network Platform boards:
+http://www.gateworks.com/avila_gw2348_4.htm
+
+Tested on NetBSD 3.99.21
+gcc version 4.1.2 20060603 prerelease (NetBSD nb1 20060602)
+
+Learned from: http://permalink.gmane.org/gmane.os.netbsd.ports.arm/822
+
+Compile toolchain:
+./build.sh -O /usr/obj/ -T /usr/tools-arm -a armeb -m evbarm tools
+
+Edit kernel config, normally:
+/usr/src/sys/arch/evbarm/conf/IXDP425
+
+Edit /usr/src/sys/arch/evbarm/conf/mk.ixdp425
+And replace:
+KERNEL_BASE_PHYS=0x10200000
+with:
+KERNEL_BASE_PHYS=0x01600000
+
+Edit line 173 in /usr/src/sys/arch/evbarm/ixdp425/ixdp425_start.S
+Replace:
+        .word   0x10200000 - 0x4000
+With:
+        .word   0x01600000 - 0x4000
+
+
+Finally compile kernel:
+./build.sh -O /usr/obj/ -T /usr/tools-arm -a armeb -m evbarm kernel=IXDP425
+
+cd /usr/obj-xcale/sys/arch/evbarm/compile/IXDP425/
+/usr/tools-xcale/bin/nbmake-evbarm && cat /path/to/gzboot netbsd.bin.gz > /tftpboot/image
+

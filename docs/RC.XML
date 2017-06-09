@@ -1,0 +1,7 @@
+Info about setup of the XML based rc.d system:
+
+The startup items are all placed in /etc/rc.xml each placed in their own directory.
+Ssh scripts as an example would be placed in /etc/rc.xml/ssh directory.
+We put a startup file in that subdirectory. It should have the same name as its parent folder,
+e.g. /etc/rc.xml/ssh/ssh
+

@@ -1,0 +1,23 @@
+By yazzy@yazzy.org
+Last change Wed Mar 30 15:27:19 UTC 2005
+
+The Atheros card has been tested for distances up to 20 km providing connection speed up to 17Mbit/s. 
+With appropriate antennas and cabling the maximum distance should be as far as 50 km.                                     
+
+These values of ack-timeout were approximated from the tests done by us, as well as by some of our customers:
+range   ack-timeout
+5GHz    5GHz-turbo      2.4GHz-G
+0km     default         default         default
+5km     52      30      62
+10km    85      48      96 
+15km    121     67      133
+20km    160     89      174
+25km    203     111     219
+30km    249     137     368
+35km    298     168     320
+40km    350     190     375
+45km    405     -       -
+
+Please note that these are not the precise values. Depending on hardware used and many other factors they may vary up to +/- 15 microseconds.
+
+

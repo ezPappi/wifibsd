@@ -1,0 +1,31 @@
+By yazzy@yazzy.org
+Last change Wed Mar 30 15:27:19 UTC 2005
+
+# FreeBSD related stuff:
+http://people.freebsd.org/~mlaier/CARP/
+http://pf4freebsd.love2party.net/carp.html
+http://www.pfsense.com/downloads/
+http://www.bsdinstaller.com/
+http://www.watson.org/~robert/freebsd/ethercons/
+
+# Embedded devices:
+http://www.viaembedded.com/product/index.jsp
+http://www.mini-itx.com/hardware.asp
+http://www.soekris.com/
+http://www.pcengines.ch/wrap.htm
+http://www.meshcube.org/english/specs.html
+http://www.lex.com.tw	#Lots of boards!
+
+#NetBSD related stuff:
+http://www.bsdnewsletter.com/2003/09/Features102.html	#Building tiny systems with embedded NetBSD
+http://www.eetimes.com/story/OEG20030912S0030	#Creating an IDE for embedded NetBSD
+http://www.netbsd.org/Documentation/network/netboot/local.install.html
+http://netbsd.gw.com/cgi-bin/man-cgi/man?diskless+8+NetBSD-current
+http://www.nlnetlabs.nl/ipv6/unman/	#netbsd based router
+http://www.munts.com/diskless/netbsd/
+http://www.feyrer.de/g4u/#rebuilding	#g4u - Harddisk Image Cloning for PCs
+http://brianrose.net/family/fetch.php?dir=/Brian/NetBSD/Embedded&filename=content.html  #Embedded NetBSD
+
+# Router projects:
+http://www.pdos.lcs.mit.edu/click/	# The Click Modular Router Project.
+http://www.xorp.org/			# eXtensible Open Router Platform.

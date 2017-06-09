@@ -1,0 +1,185 @@
+How to create bootable NetBSD image on Compact Flash
+
+By yazzy@yazzy.org
+Version 0.1.0
+Last change: Sat Apr  2 20:27:18 UTC 2005
+
+
+
+You will have to create a RAM disk image and a custom kernel in order to boot your mini NetBSD off a Compact Flash.
+The ramdisk image will have to be inserted into your kernel and then extracted to memory of your embedded device and used as the 
+root file system, which then can be used by your kernel as if it resided on a "normal" storage media like a Hard Drive.
+The NetBSD boot loader consists of two boot programs and is unable to load a compressed root file system into memory on the fly, the 
+way FreeBSD or Linux can do it.
+
+Lets get to work.
+
+From http://www.netbsd.org/guide/en/chap-misc.html#chap-misc-creating-bootfloppies :
+Create the ramdisk that gets embedded into the kernel. 
+The ramdisk contains a filesystem with whatever tools are needed, usually init(8) and some tools like sysinst, ls(1), etc. 
+To create the standard ramdisk, go to /usr/src/distrib/i386/floppies/ramdisk-big  and run make.
+
+You will then have the ramdisk-big.fs in the obj/ directory. 
+
+Now you can follow two approaches. Do things by hand or use "the NetBSD way".
+
+1. The first one is to create a build directory and copy over your ramdisk-big.fs :
+# mkdir /home/yazzy/wifibsd
+# cp obj/ramdisk-big.fs /home/yazzy/wifibsd/
+
+You can also create a custom file system image by hand instead of building it.
+You would need to build the directory tree by hand (/var, /tmp, /etc, /lib, /sbin, /bin, /dev and /usr), 
+copy over the binaries you need and the libraries which the binaries are dynamically linked to.
+To check what libraries a binary needs you can use the ldd command, e.g. :
+# ldd /sbin/ifconfig 
+/sbin/ifconfig:
+         -lutil.7 => /lib/libutil.so.7
+         -lc.12 => /lib/libc.so.12
+
+The listed libraries in our example will be needed by your ifconfig binary to work properly.
+
+Create the file system image when you have created your custom directory tree:
+Note: The size of MEMORY_DISK_ROOT_SIZE= must be equal or bigger than the size of your image.
+To calculate the kernel value you can use following rule:
+MEMORY_DISK_ROOT_SIZE=10000 would give 10000*512/1024 = 5000 kb
+
+# makefs -s 5000k custom.img image
+
+The image directory is where you have your custom made file system.
+
+Move over your kernel, which you have to compile first :
+# cp /usr/src/sys/arch/i386/compile/obj/SOEKRIS/netbsd  /home/yazzy/wifibsd/netbsd
+
+Insert the RAM disk image into your kernel:
+# mdsetimage -v -s netbsd custom.img
+
+Note: The -s option tells the kernel the size of the image. 
+It is useful if the image is smaller than the reserved memory for it in the kernel.
+The file system mounted in the RAM will then use less of it.
+
+Compress the kernel with ramdisk and be sure it's executable
+# gzip -f -9 netbsd ; mv netbsd.gz netbsd
+# chmod a+x netbsd
+
+After that, you would have to build your CF image. Skip the second approach and go to the section describing CF image creation.
+
+2. The second one is to go to the /usr/src/distrib/i386/floppies/instkernel directory.
+Now you need to edit the Makefie if you have a custom kernel with a custom name.
+Normally the Makefile will build kernel and insert the ramdisk in it for all the /usr/src/sys/arch/i386/conf/INSTALL* files.
+If you e.g have /usr/src/sys/arch/i386/conf/SOEKRIS you'd do following:
+# cp Makefile Makefile.old
+
+Edit Makefile , mine looks following:
+#       $NetBSD: Makefile,v 1.3 2002/11/18 12:39:46 lukem Exp $
+
+.include <bsd.own.mk>
+.include "${NETBSDSRCDIR}/distrib/common/Makefile.distrib"
+
+#       create ${RAMDISK_*} variables
+#
+RAMDISKS=       RAMDISK_B       ramdisk-big
+
+.for V F in ${RAMDISKS}
+${V}DIR!=       cd ${.CURDIR}/../${F} && ${PRINTOBJDIR}
+${V}=           ${${V}DIR}/${F}.fs
+.endfor
+
+MDSETTARGETS=           SOEKRIS         ${RAMDISK_B}    -
+
+MDSET_RELEASEDIR=       binary/kernel
+
+.include "${DISTRIBDIR}/common/Makefile.mdset"
+
+.include <bsd.prog.mk>
+
+Run 
+# make 
+
+Buid your custom kernel if you did not build it before , then the ramdisk gets inserted into it and put in the obj dir. 
+The easiest way to build your new kernel is to run:
+# cd /usr/src ; ./build.sh kernel=SOEKRIS
+
+After all is done my obj/ dir looks following:
+ls obj/
+netbsd-SOEKRIS               netbsd-SOEKRIS.gz            netbsd-SOEKRIS.symbols.gz
+
+Go to /usr/src/distrib/i386/floppies/bootfloppy-big and edit the Makefile if your kernel config has a different name than INSTALL.
+Replace FLOPPYKERNEL=   netbsd-INSTALL.gz with FLOPPYKERNEL=   netbsd-SOEKRIS.gz
+Where SOKRIS is of course the name of my custom kernel.
+
+Your image is ready in the obj/ dir,  obj/boot-big1.fs
+Put it to your CF.
+On FreeBSD you do:
+# dd if=boot-big1.fs of=/dev/adX bs=8k
+On Linux:
+dd if=boot-big1.fs of=/dev/hdX bs=16k
+On Windows you can use Manuel Kasper's physdiskwrite: http://www.m0n0.ch/wall/physdiskwrite.php
+
+Skip section 3 if you followed this approach.
+
+
+3. Now, lets build an image you can dd to your CF. You want to do it this way to save it for too many writings. 
+CF's are know to have their limits of how many times you can write to them.
+
+
+Create a disk image initially filled with zeroes:
+Note: the image must be at least as big as your kernel and boot file. 
+If they are 12Mb of size you will get 12*1024*1024/512 = 24576 so you set count=24576
+Use more if you want to have an additional partition mounted on your CF as FFS.
+
+# dd if=/dev/zero of=wifibsd.bin bs=1k count=15000
+
+Let's use this disk image file as a vn device so we can disklabel it:
+# vnconfig -v -c vnd0 wifibsd.bin
+or 
+# vnconfig -v -c /dev/vnd0d wifibsd.bin
+
+Our new virtual disk has to be partitioned and the file system created. 
+Run disklabel -e -I vnd0 to create the disk layout file - disklabel.proto . Rename the 'label:' and remove the unused 'd:' partition
+You can just edit your disklabel.proto afterwards setting value of total sectors: to 2x the value of count=  : 
+Do not worry about msg like 'disklabel: Invalid signature in mbr record 0'
+# disklabel -R -r vnd0 disklabel.proto
+
+
+Create file system, free-space is set to 0 (man 8 newfs):
+# newfs -m 0 vnd0a ; newfs -m 0 vnd0d
+Or the same one with byte-order set to 'le'
+# newfs -B le -m 0 -o space /dev/rvnd0a
+
+You can install UFS2 with option -O 2 given to newfs. 
+Then you can use the enhanced fast-filesystem, 
+UFS2 (suited for morethan 1 Terabyte capacity, access control lists) with installboot.
+
+Install disk bootstrap software to make our image bootable:
+# /usr/sbin/installboot -v -m i386 -o timeout=3,console=com0 -t ffs /dev/rvnd0a /usr/mdec/bootxx_ffsv1 (2)
+
+Mount your memory disk:
+# mount /dev/vnd0a /mnt
+
+Compress your image to the mounted memory file system:
+# gzip -f -9 netbsd ; mv netbsd.gz netbsd
+# cp /usr/mdec/boot /mnt/ 
+# cp netbsd /mnt/
+
+Umount the MFS
+# umount /mnt
+# vnconfig -u vnd0
+
+Put your wifibsd.bin image to your CF with dd like described above.
+
+Done
+
+/* NOTES */
+
+It is not needed to create devices in /dev as /sbin/init will create them on the fly.
+Just be sure you have all the binaries that /dev/MAKEDEV needs and that you copied it to your build directory
+The /sbin/init file runs ./MAKEDEV init
+
+Create symlinked tmp to var/tmp in the build dir. /var will be mounted on rw memory file sysem.
+# ln -s var/tmp tmp
+
+cp /usr/src/distrib/i386/floppies/common/termcap.mini image/usr/share/misc/termcap
+/* END NOTES */
+
+
+

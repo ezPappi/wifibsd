@@ -1,0 +1,28 @@
+TODO:
+
+Web interface
+	Decide on a HTTPD
+	Choose a server side script engine
+		php
+		python
+		shell cgi
+		C/C++ cgi
+		perl cgi
+
+Administrative menu shell
+	Ability to configure firewall/nat settings
+	Ability to alter crontab
+	Ability to reboot the router/firewall
+	Alter timezone settings
+	Alter Running configuration
+	flash the boot/root images
+
+
+Design a installation CD
+	create a sysinstall like script
+	el'torrito (bootable CDROM)
+	integrated fix-it cd
+	integrated live filesystem (live default WifiBSD)
+
+GUI in python
+	

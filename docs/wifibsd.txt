@@ -1,0 +1,73 @@
+By yazzy@yazzy.org
+Last change Wed Mar 30 15:27:19 UTC 2005
+
+The wifiBSD project.
+
+Goals of the project.
+
+Create a complete router solution based on FreeBSD supporting both wired and wireless devices with following features:
+
+Supported Platforms:
+	Standard x86 hardware
+	Embedded boards from soekris.com and openbrick.org
+
+Supported Interfaces:
+	Wireless Network Interfaces listed on http://www.freebsd.org/releases/5.3R/hardware-i386.html#WLAN
+	Ethernet Interfaces listed on http://www.freebsd.org/releases/5.3R/hardware-i386.html#ETHERNET
+
+Virtual Private Networking:
+	PPPoE (with RADIUS server support)
+	PPTP (with RADIUS server support)
+	IPsec
+	802.1Q VLAN
+
+High Availability:
+	CARP (Common Address Redundancy Protocol) http://pf4freebsd.love2party.net/carp.html
+
+IP Addressing and Routing:
+	Support for both IPv4 and IPv6.
+	IP Addresses and ARP
+	Static Routes
+	Equal Cost Multipath Routing
+	Policy Routing 
+	OSPF Open Shortest Path First Protocol 
+	RIP Router Information Protocol 
+	BGP Border Gateway Protocol
+
+Packet Filtering and Quality of Service:
+	PF - Packet Filter
+	ALTQ - Alternate queuing of network packets
+	NAT/PAT (including 1:1)
+
+Remote Administration:
+	Web interface 	
+	Serial console
+	GUI configuration tool
+	SSH and Telnet server.
+	FTP server for software upgrades
+
+System Utilities:
+	Package Management (each package includes sets of new futures in addition to the core system)
+	Firmware upgrade
+	Configuration backup/restore
+
+Network Services:
+	NTP (Network Time Protocol) 
+	DNS and DHCP server.
+	DHCP client
+	Caching DNS forwarder
+           DynDNS client
+	SNMP agent
+	Web Proxy
+	SOCKS Proxy Server
+	UPnP 	
+
+Methods of running/installation:
+	Run wifiBSD from LiveCD
+	Run wifiBSD from an USB stick (USB 2.0 only)
+	Install wifiBSD from bootable CD
+	Install wifiBSD from an image file to CF cards or USB memory sticks
+
+
+
+
