@@ -1,0 +1,143 @@
+#!/bin/sh
+
+. /etc/rc.common
+
+# Change the following to either PPP or PPPoE
+CONNECT_TYPE=PPPoE
+
+# Change the following if you are using PPP
+# Serial Port COM1 is /dev/ttyS0, COM2 is /dev/ttyS1 etc.
+SERIAL_PORT=/dev/ttyS0
+PORT_SPEED=57600
+TELEPHONE=
+PPP_CONNECT_TIMEOUT=60
+PPP_CONNECT_POLL=6
+
+# General configuration options
+USEPEERDNS=yes    # set to 'yes' or 'no'
+#Change the DEMAND variable to either:
+# 'no' for "always on" connection
+# N where N is the number of idle seconds before we disconnect
+#DEMAND=300
+DEMAND=no        
+
+# Echo the PPP config items above to /etc/ppp/ppp.conf for later use
+# This can be enclosed in an "if" statement, but like this
+# they are available for use if both PPP and PPPoE are desired
+
+echo "SERIAL_PORT=$SERIAL_PORT"                 >  /etc/ppp/ppp.conf
+echo "PORT_SPEED=$PORT_SPEED"                   >> /etc/ppp/ppp.conf
+echo "TELEPHONE=$TELEPHONE"                     >> /etc/ppp/ppp.conf
+echo "PPP_CONNECT_TIMEOUT=$PPP_CONNECT_TIMEOUT" >> /etc/ppp/ppp.conf
+echo "PPP_CONNECT_POLL=$PPP_CONNECT_POLL"       >> /etc/ppp/ppp.conf
+echo "USEPEERDNS=$USEPEERDNS"                   >> /etc/ppp/ppp.conf
+
+# Setting up secrets files
+#
+echo "#This file created by $0 " > /etc/ppp/pap-secrets
+echo "#User		#Server		#Password		#IP	"          >> /etc/ppp/pap-secrets
+echo "${USER_IDENT}		*		${USER_PASSWORD}		*	"  >> /etc/ppp/pap-secrets
+chmod 600 /etc/ppp/pap-secrets
+cp /etc/ppp/pap-secrets /etc/ppp/chap-secrets
+# Create some basic lines to /etc/outside.info so that
+# firewall starts up OK in case demand mode is used
+echo "OUTSIDE_DEVICE=ppp0"            >  /etc/outside.info
+echo "OUTSIDE_IP=10.112.112.112"      >> /etc/outside.info
+
+# boot up the appropriate network protocol
+#
+case "${CONNECT_TYPE}" in
+   PPPoE | PPPOE)
+      echo "Booting PPPoE"
+      #for PPPoE and PPP we need these packages (and modules)
+      if [ ! -e /bin/pppd ] ; then
+        echo "You must have the package ppp-plus.bz2 to use PPPoE"
+        exit 1
+      fi
+      if [ ! -e /bin/pppoe ] ; then
+        echo "You must have the package pppoe.bz2 to use PPPoE"
+        exit 1
+      fi 
+      insmod  /lib/modules/slhc.o
+      insmod  /lib/modules/ppp_generic.o
+      insmod  /lib/modules/ppp_async.o
+      # Setting the NIC into a friendly state
+      ifconfig ${OUTSIDE_DEV} 0.0.0.0 up -arp
+      # Create pppoe.conf for Roaring Penguin PPPoE client
+      # Read the /etc/ppp/pppoe.conf.orig for an explanation
+      echo "#This file created by network.ini" > /etc/ppp/pppoe.conf
+      echo "ETH=${OUTSIDE_DEV}"                >> /etc/ppp/pppoe.conf
+      echo "USER=${USER_IDENT}"                >> /etc/ppp/pppoe.conf
+      echo "DEMAND=${DEMAND}"                  >> /etc/ppp/pppoe.conf
+      echo "USEPEERDNS=${USEPEERDNS}"          >> /etc/ppp/pppoe.conf
+      echo "CONNECT_TIMEOUT=60"                >> /etc/ppp/pppoe.conf
+      echo "CONNECT_POLL=6"                    >> /etc/ppp/pppoe.conf
+      echo "PING=\".\""                        >> /etc/ppp/pppoe.conf
+      echo "PIDFILE=/var/run/adsl.pid"         >> /etc/ppp/pppoe.conf
+      echo "TERMINATEFILE=/var/run/pppoe.stop" >> /etc/ppp/pppoe.conf
+      echo "SYNCHRONOUS=no"                    >> /etc/ppp/pppoe.conf
+      echo "CLAMPMSS=1412"                     >> /etc/ppp/pppoe.conf
+      echo "LCP_INTERVAL=20"                   >> /etc/ppp/pppoe.conf
+      echo "LCP_FAILURE=3"                     >> /etc/ppp/pppoe.conf
+      echo "PPPOE_TIMEOUT=80"                  >> /etc/ppp/pppoe.conf
+      echo "PPPOE_EXTRA=\"\""                  >> /etc/ppp/pppoe.conf
+# The following line starts the ADSL connection using the pppoe.conf
+# file created above. adls-start then calls adsl-connect.
+# Hopefully, it should not be necessary to edit these files.
+# If they do require editing, the pppoe.bz2 will have to be
+# re-packaged.  (These are GPL'd scripts from Roaring Penguin)
+# For more info, see www.roaringpenguin.com
+      /etc/ppp/adsl-start
+      ;;
+   PPP)
+      echo "Booting PPP"
+      # For PPPoE and PPP we need this package
+      if [ ! -e /bin/pppd ] ; then
+        echo "You must have the package ppp-plus.bz2 installed to use PPP."
+        exit 1
+      fi
+      # insmod /lib/modules/serial.o
+      insmod /lib/modules/slhc.o
+      insmod /lib/modules/ppp.o
+      # edit the ppp 'options' file as necessary
+      echo "demand"              > /etc/ppp/options.ppp
+      echo "ipcp-accept-remote" >> /etc/ppp/options.ppp
+      echo "ipcp-accept-local"  >> /etc/ppp/options.ppp
+      echo "192.168.0.1:192.168.0.2" >> /etc/ppp/options.ppp
+      echo "idle 600"           >> /etc/ppp/options.ppp
+      echo "debug"              >> /etc/ppp/options.ppp
+      echo "lock"               >> /etc/ppp/options.ppp
+      echo "modem"              >> /etc/ppp/options.ppp
+      echo "crtscts"            >> /etc/ppp/options.ppp
+      echo "noipdefault"        >> /etc/ppp/options.ppp
+      echo "defaultroute"       >> /etc/ppp/options.ppp
+      echo "linkname floppyfw"  >> /etc/ppp/options.ppp
+      echo "noauth"             >> /etc/ppp/options.ppp
+      #
+      # edit the chat connect script as necessary
+      echo "TIMEOUT		3"                 > /etc/ppp/options.chat
+      echo "ABORT		'\nBUSY\r'"       >> /etc/ppp/options.chat
+      echo "ABORT		'\nNO ANSWER\r'"  >> /etc/ppp/options.chat
+      echo "ABORT	'\nRINGING\r\n\r\nRINGING\r'" >> /etc/ppp/options.chat
+      echo "''		\rAT"                     >> /etc/ppp/options.chat
+      echo "'OK-+++\c-OK'	ATH0"             >> /etc/ppp/options.chat
+      echo "TIMEOUT		30"               >> /etc/ppp/options.chat
+      echo "OK		ATDT${TELEPHONE}"         >> /etc/ppp/options.chat
+      echo "CONNECT		''"               >> /etc/ppp/options.chat 
+      echo "ogin:--ogin:	${USER_IDENT}"    >> /etc/ppp/options.chat
+      echo "assword:	${USER_PASSWORD}"         >> /etc/ppp/options.chat
+      /etc/ppp/ppp-start
+      ;;
+   *)
+      echo "Variable CONNECT_TYPE not specified correctly in $0"
+      ;;
+esac        
+
+   if test "${USEPEERDNS}" = "no" ; then
+      echo "Setting up name server (etc/resolv.conf) "
+      echo "#These next 4 entries created by $0" >> /etc/resolv.conf
+      echo "domain ${DOMAIN}" >> /etc/resolv.conf
+      echo "search ${DOMAIN}" >> /etc/resolv.conf
+      echo "nameserver ${NAME_SERVER_IP1}" >> /etc/resolv.conf
+      echo "nameserver ${NAME_SERVER_IP2}" >> /etc/resolv.conf
+   fi

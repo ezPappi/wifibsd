@@ -1,0 +1,391 @@
+#
+# SUB-ROUTINES
+#
+
+
+
+# increase the global VERBOSE variable to tweak the level of logging.
+info() {
+	if [ ${VERBOSE} -gt 0 ] ; then
+		echo -e "\033[1m\n*** `date`\n$*\n***\033[0m"
+		if [ ${VERBOSE} -gt 1 ] ;
+			then echo -e "\033[5m=== Press enter to continue\033[0m" ; read foo
+		fi
+    fi
+}
+
+
+
+# to display an embeded error msg, and bail with return var.
+# error() [ EXITCODE ] [ TEXT ]
+error() {
+	local EXITCODE
+	EXITCODE=$1 && shift				# Sample the first arg as the exit code.
+	echo -e "\033[1m\n*** `date`\nERROR: $*\n***\033[0m" > /dev/stderr
+	exit ${EXITCODE:=255}
+}
+
+
+# Send a warning to SDTERR and do nothing.
+warn() {
+	echo -e "\033[1m\n*** `date`\nWARNING: $*\n***\033[0m" > /dev/stderr
+}
+
+
+
+
+
+
+# this makes a directory skeleton from a list of files (param 1).
+# this accepts the inclusion of symbolic-links which are delimited by the colon.
+# the dirs are created within the destdir (param 2).
+makedirs() {
+	local DIRLIST DESTDIR LINE BASEDIR SLINK
+	[ $# -ne 2 ] && return 255
+	[ ! -f $1 ] && return 254
+	DIRLIST=$1 && shift
+	DESTDIR=$1 && shift
+
+	# the main loop
+	for LINE in `grep -v "^#" ${DIRLIST} | \
+	grep -v "^$" | \
+	cut -d "#" -f 1 | \
+	tr ":" " "`; do
+		set ${LINE}
+		while : ; do
+			BASEDIR=$1 && shift
+			#echo "mkdir -p ${DESTDIR}/${BASEDIR}"
+			mkdir ${VERBOPTS} -p ${DESTDIR}/${BASEDIR}
+			[ $# -eq "0" ] && break
+			while : ; do
+				SLINK=$1 && shift
+				(cd ${DESTDIR} ; ln ${VERBOPTS} -s ${BASEDIR} ${SLINK})
+				[ $# -eq "0" ] && break 2
+			done
+		done
+	done
+	return 0
+}
+
+
+
+# this copies files or directories, and hard links any files as needed.
+# directories are always copied recursively, never subject to linking.
+# files are linked as specified per line by including a colon to separate a list of links.
+# the first item per line is always a file or directory to copy, a link item can never be first.
+linkcopy() {
+	[ $# -ne 3 ] && return 255
+	[ ! -f $1 ] && return 254
+	[ ! -d $2 ] && return 252
+	[ ! -d $3 ] && return 248
+	local FILELIST SRCPATH DESTDIR LINE BASEFILE HLINK DEREF
+	FILELIST=$1 && shift
+	SRCPATH=$1 && shift
+	DESTDIR=$1 && shift
+
+	# the main loop
+	for LINE in `grep -v "^#" ${FILELIST} | \
+	grep -v "^$" | \
+	cut -d "#" -f 1`; do
+		set `echo ${LINE} | tr ":" " "`
+		while : ; do
+			BASEFILE=$1 && shift
+			# We check for dir's first.
+			if [ -d ${SRCPATH}/${BASEFILE} ];
+				then	cp ${VERBOPTS} -Rpf ${SRCPATH}/${BASEFILE} ${DESTDIR}/${BASEFILE}
+
+				else	# check for symbolic link, and if found, recreate that.
+						if [ -L ${SRCPATH}/${BASEFILE} ] ;
+							then	# make a symbolic link.
+									DEREF=`realpath ${SRCPATH}/${BASEFILE}`
+									[ -f ${DESTDIR}/${DEREF} ] || cp ${VERBOPTS} -Rpf ${SRCPATH}/${DEREF} ${DESTDIR}/${DEREF}
+									(cd ${DESTDIR} ; ln ${VERBOPTS} -s ./${DEREF} ./${BASEFILE} )
+
+							else	# it is a normal copy operation.
+									cp ${VERBOPTS} -Rpf ${SRCPATH}/${BASEFILE} ${DESTDIR}/${BASEFILE}
+						fi
+			fi
+			[ $# -eq "0" ] && break
+			while : ; do
+				HLINK=$1 && shift
+				ln ${VERBOPTS} ${DESTDIR}/${BASEFILE} ${DESTDIR}/${HLINK} 2> /dev/null
+				[ $# -eq "0" ] && break 2
+			done
+		done
+	done
+	return 0
+}
+
+
+
+# wants a (list of) dir(s) as the argument(s)
+# returns a list of libraries on stdout.
+# NEVER PUT ANYTHING HERE THAT ECHOS TO STDOUT OR STDERR.
+ldd_dir() {
+	local BIN_PATH I
+	while :; do
+		[ $# -eq 0 ] && break
+		[ ! -d ${1} ] && continue
+		BIN_PATH=${1} && shift
+		for I in ${BIN_PATH}/* ;
+			do ldd -f "%p\n" ${I} 2>/dev/null || continue
+		done
+	done | sort -u
+}
+
+
+
+# this requires a DESTDIR (param 1)
+# this uses ldd_dir() to scan DESTDIR for libs to copy.
+# copies libs from the base system to the DESTDIR.
+libcopy() {
+	local DESTDIR BINDIRS I
+	[ $# -lt "2" ] && return 255
+	[ -d $1 ] || return 254
+	DESTDIR=$1 && shift
+	for I in $*; do
+		if [ -z "${BINDIRS}" ] ;
+			then	BINDIRS="${DESTDIR}/${I}"
+			else	BINDIRS="${BINDIRS} ${DESTDIR}/${I}"
+		fi
+	done
+	shift $#
+	for I in `ldd_dir ${BINDIRS}`; do
+		cp ${VERBOPTS} -Rpf ${I} ${DESTDIR}/${I}
+		liblink ${I}
+	done
+	return 0
+}
+
+
+
+# this builds your kernel.
+# requires the KERNCONF (param 1), BASEDIR (param 2), and DESTDIR (param 3) arguments.
+# this does the configuration, depends, and build of the kernel.
+#
+# JON (april 18th 2005) kernel build overhual.
+# NOTE: remove any notion of prebuilt kernel, and add ability to calculate mdroot size.
+#
+#
+build_kernel() {
+	local _KERNCONF _BASEDIR _DESTDIR _MDSIZE _MAKEOPTS _SYSDIR _BASEKERN _KLD
+	[ $# -lt "3" ] && return 255
+	[ ! -f $1 ] && return 254				# KERNCONF
+	[ ! -d $2 ] && return 253				# BASEDIR
+	[ ! -d $3 ] && return 252				# WORKDIR
+	_KERNCONF=$1 && shift
+	_BASEDIR=$1 && shift
+	_DESTDIR=$1 && shift
+	_MDSIZE=$1 && shift
+	_SYSDIR=${_BASEDIR}/usr/src/sys/${ARCH}
+	_BASEKERN=`basename ${_KERNCONF}`
+
+
+	# Copy the kernel config file, and reset variables.
+	cp ${VERBOPTS} -Rpf ${_KERNCONF}* ${_SYSDIR}/conf/ || return 251
+	mv ${VERBOPTS} ${_SYSDIR}/conf/${_BASEKERN} ${_SYSDIR}/conf/${_BASEKERN}-`basename $(dirname ${_DESTDIR})` || return 250
+	_KERNCONF=${_SYSDIR}/conf/${_BASEKERN}-`basename $(dirname ${_DESTDIR})`
+	_BASEKERN=`basename ${_KERNCONF}`
+
+
+	# setup kernel build options.
+	echo "options MD_ROOT_SIZE=${_MDSIZE}" >> ${_KERNCONF}
+	_MAKEOPTS=" -j2 NO_IPFILTER=YES NOCLEAN=YES"
+	[ -z ${KLD_LIST} ] && _MAKEOPTS="${_MAKEOPTS} NO_MODULES=YES"
+
+	# build the kernel.
+	(cd ${_SYSDIR}/conf ; /usr/sbin/config ${_BASEKERN} ) || return 249
+	(cd ${_SYSDIR}/compile/${_BASEKERN} ; make depend) || return 248
+	(cd ${_SYSDIR}/compile/${_BASEKERN} ; make ${_MAKEOPTS}) || return 247
+	
+
+	# copy the kernel to our working area, strip it, and compress it.
+	cp ${VERBOPTS} -Rpf ${_SYSDIR}/compile/${_BASEKERN}/kernel ${_DESTDIR}/kernel/ || return 246
+
+
+	#strip ${DESTDIR}/boot/kernel/kernel
+	#strip --remove-section=.note --remove-section=.comment ${DESTDIR}/boot/kernel/kernel
+	#info "Compressing the kernel with maximum setting."
+	#gzip ${VERBOPTS} -9 ${DESTDIR}/boot/kernel/kernel
+
+	# copy any modules the dist might need.
+	#info "Copying kernle modules to the work area."
+	[ -z ${KLD_LIST} ] || {						# do the list and bail.
+		mkdir ${VERBOPTS} -p ${_DESTDIR}/modules/
+		for _KLD in ${KLD_LIST};
+			do cp ${VERBOPTS} -Rpf ${_SYSDIR}/compile/${_BASEKERN}/modules/usr/src/sys/modules/${_KLD}/${_KLD}.ko ${_DESTDIR}/modules/
+		done
+	}
+
+
+	return 0
+}
+
+
+
+
+
+
+
+
+# Simple code to reject non-root folks.
+is_root() {
+	[ `id -u` -ne "0" ] && {
+		echo "YOU ARE NOT ROOT"
+		echo "Only root can execute this script"
+		exit 255
+	}
+	return 0
+}
+
+
+# Alter the sshd_config file.
+# We want to put the hosts keys in a writeable filesystem, and allow root logins.
+do_sshd_stuff() {
+
+	info "Writing to the sshd_config file."
+	cat <<-EOF > ${WORKDIR}/etc/ssh/sshd_config || return 252
+		Protocol 2
+		HostKey /var/run/ssh_host_key
+		HostKey /var/run/ssh_host_rsa_key
+		HostKey /var/run/ssh_host_dsa_key
+		PermitRootLogin yes
+		Subsystem	sftp	/usr/libexec/sftp-server
+	EOF
+
+	return 0
+}
+
+
+
+# code to copy over the pam modules in an approptiate way.
+do_pam_modules() {
+	local _PAM _PAMLIB
+	for _PAM in ${BASEDIR}/usr/lib/*pam*.[0-9] ; do
+		cp ${VERBOPTS} -Rpf ${_PAM} ${WORKDIR}/usr/lib/
+		liblink ${_PAM}
+	done
+
+	# This removes fixes the dynamic-dynamic libs.
+	# it ldd's the libs, and finds all the libs (which ohter libs might link in).
+	info "Locating dynamic libs of other libs."
+	for _PAMLIB in `ls ${WORKDIR}/usr/lib/*pam*.[0-9] | xargs ldd -f "%p\n" | sort -u`; do
+		[ -f ${WORKDIR}/${_PAMLIB} ] || {
+			cp ${VERBOPTS} -Rpf ${_PAMLIB} ${WORKDIR}/${_PAMLIB}
+			liblink ${_PAMLIB}
+			continue
+		}
+	done
+}
+
+
+# Code to change the root password.
+do_root_pass() {
+
+	local _ETCDIR ROOTPAS1 ROOTPAS2
+
+	[ $# -lt "1" ] && return 255
+	[ -d $1 ] || return 254
+	[ -f ${1}/master.passwd ] || return 254
+	_ETCDIR=$1 && shift
+
+
+	if [ ! -z ${ROOTPASS} ];
+		then	# the ROOTPASS var is non-zero
+				# this means somebody took the time to set the variable in the config.
+				info "Changing the root password from wifibsd.conf"
+				echo -n "${ROOTPASS}" |  pw -V ${WORKDIR}/etc/ usermod -u 0 -h 0
+
+		else	# give the use a chance input a password.
+				# timeout after 5 seconds.
+
+				info "Changing the root password from input"
+				while : ; do
+					stty -echo
+					echo "5 second timeout."
+					echo -n "Enter new password: "
+					read -r -t 5s _ROOTPAS1 foo || {
+						echo -e "\nNo input after 5 seconds, resuming."
+						break
+					}
+					echo -e "\nConfirm password: \c"
+					read -r _ROOTPAS2 foo
+					echo ""
+					stty echo
+
+					# if they are not the same string, redo.
+					[ "${_ROOTPAS2}" != "${_ROOTPAS2}" ] && {
+						echo "Must comfirm password, retry."
+						continue
+					}
+
+					echo -n "${_ROOTPAS2}" |  pw -V ${_ETCDIR} usermod -u 0 -h 0 && {
+						echo "password changed"
+						unset -v _ROOTPAS1 _ROOTPAS2
+						break
+					}
+				done
+	fi
+	return 0
+}
+
+
+
+# To create an mfsroot image.
+# $1:	The dir of the mfsroot image.
+# $2:	The name you wish to give the resulting mfs-image file.
+# $3:	The mount point of the mfs.
+# $4:	The optional size of the resulting image.
+create_mfs() {
+
+	[ "$#" -ne "3" ] && return 255	# Three parameters, or bail.
+
+	# The variables
+	local _ROOT_DIR _ROOT_IMGNAME _MNTPOINT _IMGSIZE _DEVTYP _DEVNUM _MD_DEVICE
+
+	[ -d $1 ] || return 254			# check $1 is a dir
+	_ROOT_DIR=$1 && shift			# The dir we copy everything from.
+	_ROOT_IMGNAME=$1 && shift		# The name of the resulting image file.
+	[ -d $1 ] || return 253			# Scoope in the mount-point parameter.
+	_MNTPOINT=$1 && shift
+	if [ $# -gt "0" ]; 				# the imgsize is manually set.
+		then	_IMGSIZE=$1 && shift $#
+		else	_IMGSIZE=`(cd ${_ROOT_DIR} ; du -s . ) | cut -d "." -f 1 | cut -d " " -f 1`
+				_IMGSIZE=`expr ${_IMGSIZE} / 5 + ${_IMGSIZE}`		# plus 1/5th
+	fi
+	_DEVTYP=${_DEVTYP:-"md"}		# This is for vnode memory disks on a 5.x system.
+	_DEVNUM=${_DEVNUM:-"9"}			# The default vnode memory-disk minor device number.
+	_MD_DEVICE=${_DEVTYP}${_DEVNUM}	# The basename of the device-node used for the VNODE.
+
+	dd if=/dev/zero of=${_ROOT_IMGNAME} count=${_IMGSIZE} bs=1k 2> /dev/null	# Make empty file.
+	echo "mdconfig -a -t vnode -u ${_DEVNUM} -f ${_ROOT_IMGNAME}"
+	mdconfig -a -t vnode -u ${_DEVNUM} -f ${_ROOT_IMGNAME}				# Make a virtual device.
+
+	#info "applying a bsd label to the MFS, and formating."
+	bsdlabel -rw ${_MD_DEVICE} auto										# Give it a default label.
+	newfs -m 0 -b 8192 -f 1024 ${SOFTUPDATES} /dev/${_MD_DEVICE}c		# Format the entire disk.
+
+	#info "Mounting the MFS and installing data."
+	mount ${VERBOPTS} /dev/${_MD_DEVICE}c ${_MNTPOINT}					# Mount the filesystem.
+	# Install the root.
+
+	(cd ${_ROOT_DIR} ; tar -c -f - * ) | (cd ${_MNTPOINT} ; tar ${VERBOPTS} -x -p -f - )
+	umount ${VERBOPTS} ${_MNTPOINT}										# Release the filesystem.
+	mdconfig -d -u ${_DEVNUM}											# Break the virtual node.
+
+	return 0
+}
+
+
+# when you copy a library file, this function creates the compatibility symlink.
+# example libpcap.so.2 => libpcap.so
+liblink() {
+	local _LIB _BASENAME _LINKNAME
+	_LIB=$1
+	_BASENAME=`basename ${_LIB}`
+	_LINKNAME=`echo ${_BASENAME} | cut -d "." -f 1-2`
+	#echo "(cd ${WORKDIR}`dirname ${_LIB}` ; ln ${VERBOPTS} -s ${_BASENAME} ${_LINKNAME})"
+	(cd ${WORKDIR}`dirname ${_LIB}` ; ln ${VERBOPTS} -s ${_BASENAME} ${_LINKNAME})
+}
+
+

@@ -1,0 +1,28 @@
+#!/bin/sh
+
+name="lighttpd"
+rcvar=$name
+command="/usr/local/sbin/${name}"
+conf_file="/usr/local/etc/${name}.conf"
+pid_file="/var/run/${name}.run"
+
+lighttpd_check()
+{
+	(
+	umask 022
+	if [ -f ${conf_file} ]; then
+		if [ ! -f ${pid_file} ]; then
+			touch ${pid_file}
+			chown nobody:nogroup ${pid_file}
+		fi 
+		${command} -f ${conf_file} 1>/dev/null 2>&1
+	else
+		echo "Web server config file is unavaliable!"
+		echo "Please create ${conf_file}."
+		echo "The ${name} did not start."
+	fi
+	)
+}
+
+echo "Starting web service..."
+lighttpd_check

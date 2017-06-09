@@ -1,0 +1,16 @@
+#!/bin/sh
+
+name="pf"
+
+pf_ride()
+{
+	cd /dev/ ; ./MAKEDEV pf
+	${pf_program:-/sbin/pfctl} -Fa > /dev/null 2>&1
+
+        if ! ${pf_program:-/sbin/pfctl} -si | grep -q "Enabled" ; then
+                ${pf_program:-/sbin/pfctl} -e -f /etc/pf.conf
+        fi
+}
+
+echo "Enabling firewalling..."
+pf_ride

@@ -1,0 +1,109 @@
+a {
+	color: #255A99;
+	text-decoration: none;
+}
+a:hover { 
+	color: #770000; 
+	text-decoration: underline;
+}
+a: visited { color: #255A99; }
+a:active { color: #8d7657; }
+
+.navigation {
+	border: 1px solid #990000;
+	padding: 0px;
+	margin: 0px;
+	height: 100%;
+}
+
+li { 
+	list-style-type: circle; 
+	color: #6b5435;	
+}
+h4 {
+	padding: 0px;
+	margin: 0px;
+	color: #6b5435;
+}
+
+.textStartsite {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 12px;
+}
+.textBold {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 12px;
+	font-weight: bold;
+}
+.textBoldGrey {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 12px;
+	font-weight: bold;
+	color: #666666;
+
+}
+.textStandard {
+
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 12px;
+}
+.textNav {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 12px;
+	color: #006699;
+	text-decoration: none;
+	font-weight: bold;
+
+}
+
+.trborderA {
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 10px ;
+        font-weight: bold;
+}
+
+
+.tdborder {
+        border-top: 1px solid #999999;
+        border-right: none;
+        border-bottom: none;
+        border-left: 1px solid #999999;
+	font-size: 12px ;
+}
+.tdborderright {
+        border-top: 1px solid #999999;
+        border-right: 1px solid #999999;
+        border-bottom: none;
+        border-left: 1px solid #999999;
+	font-size: 12px ;
+}
+.tdborderdown {
+        border-top: 1px solid #999999;
+        border-right: none;
+        border-bottom: 1px solid #999999;
+        border-left: 1px solid #999999;
+	font-size: 10px ;
+}
+
+.tdborderdup {
+        border-top: 0px solid #999999;
+        border-right: none;
+        border-bottom: 1px solid #999999;
+        border-left: 1px solid #999999;
+	font-size: 10px ;
+}
+.tdborderupright {
+        border-top: 0px solid #999999;
+        border-right: 1px solid #999999;
+        border-bottom: 1px solid #999999;
+        border-left: 1px solid #999999;
+	font-size: 10px ;
+}
+.tdborderdownright {
+        border-top: 1px solid #999999;
+        border-right: 1px solid #999999;
+        border-bottom: 1px solid #999999;
+        border-left: 1px solid #999999;
+	font-size: 10px ;
+}
+

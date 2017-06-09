@@ -1,0 +1,28 @@
+#!/bin/sh
+
+HOME=/
+PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/libexec:/
+TERM=wsvt25
+BLOCKSIZE=1k
+export PATH
+export TERM
+export BLOCKSIZE
+export HOME
+umask 022
+
+#Pull in some functions that poeple can use from shell prompt
+dmesg () cat /kern/msgbuf
+#grep () sed -n "/$1/p"
+
+install_start(){
+                # Mount the disks reading the fstab info.
+                # Run fsck if cannot mount.
+                mount -a || fsck -yq 1>/dev/null 2>&1 && mount -a || fsck -f -y
+                #mount -u /dev/md0a /
+		#/usr/sbin/pwd_mkdb /etc/master.passwd
+                /bin/sh /etc/wscons
+                #/usr/libexec/getty autologin ttyE1 vt220 &
+}
+
+install_start
+

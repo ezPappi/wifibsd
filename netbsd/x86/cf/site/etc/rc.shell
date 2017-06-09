@@ -1,0 +1,70 @@
+#!/bin/sh
+# /etc/rc.start
+#
+CONFIG="/conf/config.xml"
+WORD="https"
+# make sure the user can't kill us by pressing Ctrl-C
+trap : 2  
+trap : 3
+trap : 4
+        
+if [ -r /conf/etc/disableconsole ]; then
+        
+while : ; do
+  
+echo    
+echo    
+echo "*** Console menu disabled. ***"
+echo    
+        
+read tmp
+        
+done    
+  
+else    
+        
+# endless loop
+while : ; do
+        
+/etc/rc.banner
+   
+# display a cheap menu
+echo "Please chose one:"
+echo "**********************"
+echo "0)  Logout"
+echo "1)  Quick Setup Menu"
+echo "2)  Shell"
+echo
+
+read -p "Enter a number: " opmode
+echo
+
+# see what the user has chosen
+case ${opmode} in 
+0)
+        exit && exit && logout 
+        ;;
+1)
+        /etc/rc.menu
+        ;;
+2)
+        /bin/tcsh
+        ;;
+*)
+	continue
+	;;	
+
+10)
+        if grep "$WORD" "$CONFIG"
+        then
+                links "https://localhost"
+        else
+                links "http://localhost"
+        fi
+        ;;
+esac 
+
+done 
+
+fi
+

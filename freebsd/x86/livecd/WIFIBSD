@@ -1,0 +1,284 @@
+# Kernel config for WIFIBSD-generic
+machine		i386
+cpu		I486_CPU
+cpu		I586_CPU
+cpu		I686_CPU
+ident		WIFIBSD
+
+maxusers        0
+
+# To statically compile in device wiring instead of /boot/device.hints
+hints		"GENERIC.hints"		# Default places to look for devices.
+
+#options		INCLUDE_CONFIG_FILE	# Include the kernel config in the kernel
+
+# FFS options
+options		FFS			#Berkeley Fast Filesystem
+options		SOFTUPDATES		#Enable FFS soft updates support
+options		UFS_DIRHASH		#Improve performance on big directories
+options		UFS_ACL			#Support for access control lists
+# Read more in /usr/src/sys/ufs/ufs/README.extattr
+options		UFS_EXTATTR
+options		UFS_EXTATTR_AUTOSTART
+
+# Other FS options
+options         MD_ROOT                         #MD is a potential root device
+options		CD9660				#ISO 9660 Filesystem
+options		PROCFS                          #Process filesystem (requires PSEUDOFS)
+options		PSEUDOFS                        #Pseudo-filesystem framework
+
+# Disk geometry (GEOM) subsystem
+options		GEOM_MBR		#i386 MBRs
+options		GEOM_BSD		#BSD disklabels
+options		GEOM_VOL		#get volume names from FFS superblock
+options		GEOM_BDE		#GEOM disk encryption
+options 	GEOM_GPT			#GUID Partition Tables.
+options         GEOM_UZIP
+
+options		NO_SWAPPING
+
+options         COMPAT_43                       #Compatible with BSD 4.3 [KEEP THIS!]
+options         COMPAT_FREEBSD4                 #Compatible with FreeBSD4
+options		KTRACE                          #ktrace(1) support
+options         SYSVSHM                         #SYSV-style     shared memory
+options         SYSVMSG                         #SYSV-style     message queues
+options         SYSVSEM                         #SYSV-style     semaphores
+options         _KPOSIX_PRIORITY_SCHEDULING     #Posix P1003_1B real-time extensions
+options         SCHED_4BSD                      #4BSD scheduler
+#options 	AHC_REG_PRETTY_PRINT		# Print register bitfields in debug
+						# output.  Adds ~128k to driver.
+#options 	AHD_REG_PRETTY_PRINT		# Print register bitfields in debug
+						# output.  Adds ~215k to driver.
+options 	ADAPTIVE_GIANT			# Giant mutex is adaptive.
+
+# General Soekris.
+options         CPU_SOEKRIS			# Recommended - Set up things for soekris board i.e. /dev/led/error
+
+#Soekris 4801 specific and WRAP specific
+options		CPU_GEODE			# Adds a "Geode" timecounter which is better than i8254
+
+#Soekris 45xx (Net4501, Net4511, Net4521) specific
+options		CPU_ELAN			# Mandatory - Work around for the ElanSC520 CPU.
+options		HZ=250				# Increase HZ to at least 150 in order to take advantage of the "ELAN" timecounter.
+options		CPU_ELAN_XTAL=32768000		# Set the frequency of CPU xtal.
+
+# Do not enable this option. Soekris will not boot!
+#options		CPU_ELAN_PPS			# Enable support for precision timestamping on an external signal.
+
+
+# To make an SMP kernel, the next two are needed
+#options 	SMP				# Symmetric MultiProcessor Kernel
+device		apic				# I/O APIC
+
+# Bus support.  Do not remove isa, even if you have no isa slots
+device		isa
+device		eisa
+device		pci
+
+# Floppy drives
+device		fdc
+
+# ATA and ATAPI devices
+device		ata
+device		atadisk				# ATA disk drives
+device          ataraid                 	# ATA RAID drives
+device		atapicd				# ATAPI CDROM drives
+device		atapifd				# ATAPI floppy drives
+options 	ATA_STATIC_ID			# Static device numbering
+
+# Hardware-accelerated IP Security Protocols
+options		FAST_IPSEC			# New IPsec (cannot define w/ IPSEC)
+options		IPSEC_DEBUG			# Debug for IP security
+device		crypto
+device		cryptodev
+device		hifn
+device		rndtest				# Random number generator test monitor
+
+# atkbdc0 controls both the keyboard and the PS/2 mouse
+device		atkbdc				# AT keyboard controller
+device		atkbd				# AT keyboard
+device		psm				# PS/2 mouse
+options		PSM_HOOKRESUME			# Hook the system resume event, useful
+options		PSM_RESETAFTERSUSPEND		# Reset the device at the resume event
+options 	KBD_INSTALL_CDEV		# Install a CDEV entry in /dev
+
+device		vga				# VGA video card driver
+
+#device		splash				# Splash screen and screen saver support
+
+# System console
+device		sc				# SCO-style console driver
+#device		splash				# Splash screen support
+options		MAXCONS=16			# Number of virtual consoles
+options		SC_ALT_MOUSE_IMAGE		# Simplified mouse cursor in text mode
+options		SC_PIXEL_MODE			# Add support for the raster text mode
+options		SC_DISABLE_REBOOT		# Disable the ALT+CTRL+DEL key sequence
+
+device		agp				# Support several AGP chipsets
+
+# Floating point support - do not disable.
+device		npx				# Required for i386
+
+# Add suspend/resume support for the i8254.
+device		pmtimer
+
+# PCCARD (PCMCIA) support
+# PCMCIA and cardbus bridge support
+device		cbb				# cardbus (yenta) bridge
+device		pccard				# PC Card (16-bit) bus
+device		cardbus				# CardBus (32-bit) bus
+
+# Serial (COM) ports
+device		sio				# 8250, 16[45]50 based serial ports
+
+# PCI Ethernet NICs.
+device		de				# DEC/Intel DC21x4x (``Tulip'')
+device		em				# Intel PRO/1000 adapter Gigabit Ethernet Card
+device		ixgb				# Intel PRO/10GbE Ethernet Card
+device		txp				# 3Com 3cR990 (``Typhoon'')
+device		vx				# 3Com 3c590, 3c595 (``Vortex'')
+
+# PCI Ethernet NICs that use the common MII bus controller code.
+# NOTE: Be sure to keep the 'device miibus' line in order to use these NICs!
+device		miibus				# MII bus support
+device		bfe				# Broadcom BCM440x 10/100 Ethernet
+device		bge				# Broadcom BCM570xx Gigabit Ethernet
+device		dc				# DEC/Intel 21143 and various workalikes
+device		fxp				# Intel EtherExpress PRO/100B (82557, 82558)
+device		pcn				# AMD Am79C97x PCI 10/100 (precedence over 'lnc')
+device		re				# RealTek 8139C+/8169/8169S/8110S
+device		rl				# RealTek 8129/8139
+device		sf				# Adaptec AIC-6915 (``Starfire'')
+device		sis				# Silicon Integrated Systems SiS 900/SiS 7016
+device		sk				# SysKonnect SK-984x & SK-982x gigabit Ethernet
+device		ste				# Sundance ST201 (D-Link DFE-550TX)
+device		ti				# Alteon Networks Tigon I/II gigabit Ethernet
+device		tl				# Texas Instruments ThunderLAN
+device		tx				# SMC EtherPower II (83c170 ``EPIC'')
+device		vr				# VIA Rhine, Rhine II
+device		wb				# Winbond W89C840F
+device		xl				# 3Com 3c90x (``Boomerang'', ``Cyclone'')
+
+# ISA Ethernet NICs.  pccard NICs included.
+device		cs				# Crystal Semiconductor CS89x0 NIC
+# 'device ed' requires 'device miibus'
+device		ed				# NE[12]000, SMC Ultra, 3c503, DS8390 cards
+device		ex				# Intel EtherExpress Pro/10 and Pro/10+
+device		ep				# Etherlink III based cards
+device		fe				# Fujitsu MB8696x based cards
+device		ie				# EtherExpress 8/16, 3C507, StarLAN 10 etc.
+device		lnc				# NE2100, NE32-VL Lance Ethernet cards
+device		sn				# SMC's 9000 series of Ethernet chips
+device		xe				# Xircom pccard Ethernet
+
+# WaveLAN/IEEE 802.11 wireless NICs.
+options         WLCACHE
+options         WLDEBUG
+
+device		wlan				# 802.11 Support
+device		wi				# Lucent Hermes, Intersil PRISM-II/2.5/3, and Symbol Spectrum24 chipsets
+device		ath				# Atheros AR5211/AR5212 802.11 b/g/a wireless NICS.
+device		ath_hal				# Atheros Hardware Abstraction Layer.
+device		an				# Aironet 4500/4800 802.11 wireless NICs.
+device		awi				# BayStack 660 and others
+
+#GENERAL NETWORK OPTIONS
+options         INET                    	# InterNETworking
+options         INET6                   	# IPv6 communications protocols
+options         TCPDEBUG
+options         TCP_DROP_SYNFIN         	# Drop TCP packets with SYN+FIN
+options         IPSTEALTH               	# To hide firewall from traceroute, support for stealth forwarding
+options         ZERO_COPY_SOCKETS       	# Speeds up inet stuff, man zero_copy
+options         BRIDGE
+options         TCPDEBUG
+options         TCP_SIGNATURE			# TCP MD5 Signatures, for BGP routing sessions.
+
+# NetGraph
+options         NETGRAPH                #netgraph(4) system
+options         NETGRAPH_ASYNC
+options         NETGRAPH_BPF
+options         NETGRAPH_BRIDGE
+options         NETGRAPH_CISCO
+options         NETGRAPH_ECHO
+options         NETGRAPH_ETHER
+options         NETGRAPH_FRAME_RELAY
+options         NETGRAPH_HOLE
+options         NETGRAPH_IFACE
+options         NETGRAPH_KSOCKET
+options         NETGRAPH_L2TP
+options         NETGRAPH_LMI
+# MPPC compression requires proprietary files (not included)
+#options        NETGRAPH_MPPC_COMPRESSION
+options         NETGRAPH_MPPC_ENCRYPTION
+options         NETGRAPH_ONE2MANY
+options         NETGRAPH_PPP
+options         NETGRAPH_PPPOE
+options         NETGRAPH_PPTPGRE
+options         NETGRAPH_RFC1490
+options         NETGRAPH_SOCKET
+options         NETGRAPH_TEE
+options         NETGRAPH_TTY
+options         NETGRAPH_UI
+options         NETGRAPH_VJC
+
+
+# The `bpf'     pseudo-device enables the Berkeley Packet Filter.
+# Be aware of the administrative consequences of enabling this!
+device  bpf             #Berkeley packet filter
+
+# Carp replaces VRRP
+#device		carp
+
+device		vlan
+
+#FIREWALLING PF & ALTQ
+device          pf
+device          pflog
+device          pfsync
+
+options         ALTQ
+options         ALTQ_CBQ
+options         ALTQ_RED
+options         ALTQ_RIO
+options         ALTQ_HFSC
+options         ALTQ_CDNR
+options         ALTQ_PRIQ
+options         ALTQ_NOPCC
+options         ALTQ_DEBUG
+
+# Pseudo devices.
+device		loop				# Network loopback
+device		random				# Entropy device
+device		ether				# Ethernet support
+device		sl				# Kernel SLIP
+device		ppp				# Kernel PPP
+device		tun				# Packet tunnel.
+device		pty				# Pseudo-ttys (telnet etc)
+device		md				# Memory "disks"
+device		gif				# IPv6 and IPv4 tunneling
+device		faith				# IPv6-to-IPv4 relaying (translation)
+device          mem             		# Memory and kernel memory devices
+device          io              		# I/O device
+device          tap				# Ethernet tunnel software network interface
+device          stf				# 6to4 tunnel interface
+
+# SCSI peripherals
+device          scbus           		# SCSI bus (required for SCSI)
+device          da              		# Direct Access (disks)
+
+# USB devices.
+device          uhci            		# UHCI PCI->USB interface
+device          ohci            		# OHCI PCI->USB interface
+device          usb             		# USB Bus (required)
+device          ukbd            		# Keyboard
+device          ugen            		# Generic
+device          uhid            		# "Human Interface Devices"
+device          umass           		# Disks/Mass storage - Requires scbus and da
+
+# USB Ethernet, requires mii
+device          aue             		# ADMtek USB Ethernet
+device          axe             		# ASIX Electronics USB Ethernet
+device          cue             		# CATC USB Ethernet
+device          kue             		# Kawasaki LSI USB Ethernet
+device          rue             		# RealTek RTL8150 USB Ethernet
+

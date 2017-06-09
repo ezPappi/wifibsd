@@ -1,0 +1,131 @@
+#!/bin/sh
+
+HOME=/
+PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/libexec:/
+TERM=wsvt25
+BLOCKSIZE=1k
+export PATH
+export TERM
+export BLOCKSIZE
+export HOME
+umask 022
+
+#Pull in some functions that poeple can use from shell prompt
+#dmesg () cat /kern/msgbuf
+#grep () sed -n "/$1/p"
+
+#Include colours
+. /etc/colors.disp
+
+
+backup_etc_files(){
+	mkdir -p /tmp/backup/etc 
+for d in /etc/ttys /etc/rc.start /etc/wscons.conf /etc/wscons /etc/rc.install /etc/install-nbsd /etc/passwd /etc/pwd.db /etc/master.passwd /etc/spwd.db 
+do
+	cp -f $d /tmp/backup/etc
+done
+	rm -rf /etc/*
+}
+
+restore_etc_files(){
+for e in /tmp/backup/etc/* ; do
+	cp -rpf $e /etc/
+done
+}
+
+backup_root_files(){
+	mkdir /tmp/backup/root 
+for a in /root/.tcshrc /root/.login ; do
+	cp -rf $a /tmp/backup/root/
+done
+}
+
+restore_root_files(){
+for b in /tmp/backup/root/.tcshrc /tmp/backup/root/.login ; do
+	mv $b /root/
+done
+}
+
+start_system(){
+                # Mount the disks reading the fstab info.
+                # Run fsck if cannot mount.
+                #mount -a || fsck -y && mount -a || fsck -y
+
+        mount -a 
+	backup_etc_files
+	backup_root_files
+	mount_mfs -s 1m swap /etc
+	mount_mfs -s 1m swap /root
+
+	# Clear the screen
+	tput cl
+	#echo "${MAGENTA}==> Mounting /usr ${NORMAL}"
+	#rm -rf /usr/*
+	#mount_mfs -s 10m swap /usr
+	#echo "${CYAN}==> Mounting /sbin ${NORMAL}"
+	mount_mfs -s 3m swap /sbin
+	
+}
+
+copy_system(){
+	echo ""
+	echo "${MAGENTA}==> Extracting system files...${NORMAL}"
+	if [ -d /cdrom ]; then
+                for f in /cdrom/*.wpkg; do
+                    if [ -f $f ]; then
+			tar zxpf $f -C /tmp 
+                    fi
+                done
+
+	echo "${BLUE}==> Copying site files...${NORMAL}"
+#	cd /tmp/site
+	
+#	echo "${RED}==> Copying lib files...${NORMAL}"
+		cd /tmp/site/lib/ && /usr/bin/find . | /bin/cpio -vupdm /lib/ 1>/dev/null 2>&1
+#		/bin/cp -RPvf /tmp/site/lib/* /lib/
+#	sleep 10
+#	echo "${RED}==> Copying etc files...${NORMAL}"
+		cd /tmp/site/etc && /usr/bin/find . | /bin/cpio -vupdm /etc/ 1>/dev/null 2>&1
+#		cp -RPf /tmp/site/etc/* /etc/
+	echo "${RED}==> Restoring old etc files...${NORMAL}"
+		restore_etc_files
+
+	echo "${RED}==> Copying bin files...${NORMAL}"
+		cd /tmp/site/bin/ && /usr/bin/find . | /bin/cpio -vupdm /bin/ 1>/dev/null 2>&1
+#		cp -RPf /tmp/site/bin/* /bin/
+
+	echo "${RED}==> Copying libexec files...${NORMAL}"
+		cd /tmp/site/libexec/ && /usr/bin/find . | /bin/cpio -vupdm /libexec/ 1>/dev/null 2>&1
+#		cp -RPf /tmp/site/libexec/* /libexec/
+
+	echo "${RED}==> Copying sbin files...${NORMAL}"
+		cd /tmp/site/sbin/ && /usr/bin/find . | /bin/cpio -vupdm /sbin/ 1>/dev/null 2>&1
+#		cp -RPf /tmp/site/sbin/* /sbin/
+
+	echo "${RED}==> Copying usr files...${NORMAL}"
+		rm -rf /usr/*
+		mount_mfs -s 10m swap /usr
+		cp -RPf /tmp/site/usr/* /usr/
+
+	echo "${RED}==> Copying root files..."
+		cd /tmp/site/root/ ; find . | cpio -vupdm /root 1>/dev/null 2>&1
+	echo "${RED}==> Restoring LiveCD specific root files...${NORMAL}"
+		restore_root_files
+		rm -rf /tmp/backup
+
+	sleep 2
+	
+	#Start wscons	
+	#echo "${YELLOW}==> Starting console drivers...${NORMAL}"
+        #        /bin/sh /etc/wscons 1>/dev/null 2>&1
+			
+	echo "${DARKGREEN}==> Done. Proceeding...${NORMAL}"
+		sleep 2
+	/etc/rc.start
+	else
+		echo "${DARKRED}==> Could not find LiveCD files! ${NORMAL}"
+	fi
+}	
+
+start_system
+copy_system

@@ -1,0 +1,46 @@
+#!/bin/sh
+#
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/libexec
+TERM=wsvt25
+BLOCKSIZE=1k
+EDITOR=vi
+PAGER=less
+export PATH
+export TERM
+export BLOCKSIZE
+export EDITOR
+export PAGER
+
+##
+# Generic action handler
+##
+RunService ()
+{
+    case $1 in 
+      start  ) StartService   ;;
+      stop   ) StopService    ;;
+      restart) RestartService ;;
+      *      ) echo "$0: unknown argument: $1";;
+    esac
+}
+
+
+##
+# Determine if the network is up by looking for any non-loopback
+# internet network interfaces.
+##
+CheckForNetwork()
+{
+    local test
+
+    if [ -z "${NETWORKUP:=}" ]; then
+        test=$(ifconfig -a inet | sed -n -e '/127.0.0.1/d' -e '/0.0.0.0/d' -e '/inet/p' | wc -l)
+        if [ "${test}" -gt 0 ]; then
+            NETWORKUP="-YES-"
+        else
+            NETWORKUP="-NO-"
+        fi
+    fi
+}
+

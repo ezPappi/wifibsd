@@ -1,0 +1,16 @@
+#!/bin/sh
+
+# Start DNS and DHCP server - dnsmasq
+
+IFACES=`/sbin/ifconfig -l`
+
+for x in ${IFACES} ; do
+        # Display only output equal 3 chars, e.g ath0
+        if [ ${#x} > 3 ]; then
+                case ${x} in
+		sip0)
+			/usr/local/sbin/dnsmasq -C /usr/local/etc/dnsmasq.conf 
+                ;;
+                esac
+        fi
+done

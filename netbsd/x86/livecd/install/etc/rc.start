@@ -1,0 +1,166 @@
+#!/bin/sh
+
+SHELL=/bin/sh
+PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/libexec
+TERM=wsvt25
+BLOCKSIZE=1k
+export PATH
+export TERM
+export BLOCKSIZE
+PWD_PATH=`pwd`
+
+. /etc/colors.disp
+
+stty status '^T'
+
+# Make sure the user can't kill us by pressing Ctrl-C
+trap : 2
+trap : 3
+trap : 4
+
+prog=${0##*/}
+umask 022
+
+hostname=`cat /etc/hostname`
+PS1="`hostname `# "
+
+# ====================================================================== #
+#                               My functions :                           #
+# ====================================================================== #
+
+showmsg()
+{
+        echo "${YELLOW}===> $@${NORMAL}"
+}
+
+showerr()
+{
+        echo "${RED}===> $@${NORMAL}"
+}
+
+showquest()
+{
+        echo "${GREEN}===> $@${NORMAL}"
+}
+
+showinfo()
+{
+        echo "${BLUE}===> $@${NORMAL}"
+}
+
+
+chose_lang(){
+echo ""
+showinfo "Please type in your keyboard encoding."
+read -p "`echo -n ${BLUE} Supported encodings: ${RED}be, de, dk, es, fr, hu, it, jp, no, pl, pt, ru, sf, sg, sv, ua, uk, us ${BLUE} ... : ${NORMAL}`" ENC
+#echo "encoding ${ENC}" >> /etc/wscons.conf
+wsconsctl -kw encoding=${ENC}
+
+if [ "$?" = "1" ]; then
+echo "${RED}Please chose your encoding again.${NORMAL}"
+chose_lang
+fi
+}
+
+
+chose_type(){
+	clear
+        showquest "Run LiveCD or install wifiBSD to your disk ? [L/I]:"
+        read -p "`showmsg Enter your choice:` " install_choice
+        echo ""
+
+        case ${install_choice} in
+
+[Ll]|[Ll][Ii][Vv][Ee][Cc][Dd])
+        
+	#pkill -9 getty && /usr/libexec/getty Pc ttyE1 &
+	
+for x in "/var/db" "/var/run" "/var/tmp/vi.recover" \
+	"/var/log" "/var/chroot/sshd" "/var/chroot/pflogd" ; do
+
+	if [ ! -d $x ]; then
+	 	mkdir -p $x
+	fi
+done
+
+for y in "/var/db/dhcpd.leases" "/var/log/all" \
+	"/var/log/authlog" "/var/log/lastlog" \
+	"/var/log/messages" "/var/run/utmp" \
+	"/var/run/syslogd.sockets" "/var/run/pflogd.pid" \
+	"/var/run/dhclient.pid" "/var/run/utmpx" "/var/run/utmp"
+do
+	if [ ! -f $y ]; then
+		touch $y
+	fi
+done
+
+#Sync password database:
+#/usr/sbin/pwd_mkdb /etc/master.passwd
+
+chose_lang
+
+echo ""
+
+# Configure loopback's IP
+ifconfig lo0 127.0.0.1
+
+showmsg "Starting services..."
+
+for z in "/etc/rc.d/010.devdb.run" "/etc/rc.d/010.pf.run" \
+	"/etc/rc.d/010.syslogd.run" "/etc/rc.d/015.pflogd.run" \
+	"/etc/rc.d/020.sshd.run" "/etc/rc.d/020.wscons.run" \
+	"/etc/rc.d/030.mini_httpd.run"
+do
+	if [ -x $z ]; then
+		$z
+	fi	
+done
+
+	sleep 2
+	tput cl
+	#Set hostname
+	hostname ${hostname}
+	#Remove rests
+	if [ -d /tmp/site ] ; then 
+		rm -rf /tmp/site
+	fi
+
+        #Start wscons
+        #echo "${YELLOW}==> Starting console drivers...${NORMAL}"
+        #        /bin/sh /etc/wscons 1>/dev/null 2>&1
+	#Eject CD
+	eject -d /dev/cd0a 1>/dev/null 2>&1
+        return 0
+        ;;
+
+[Ii]|[Ii][Nn][Ss][Tt][Aa][Ll][Ll])
+        showmsg "You chose to install wifiBSD on your drive."
+        showmsg "Initializing ..."
+        /etc/rc.install
+        return 0
+        ;;
+
+*)
+        showinfo "Your choice - '${install_choice}' is illegal"
+        showinfo "Please chose either L (Livecd) or I (Install)"
+        echo ""
+	sleep 2
+#        continue
+#        return 0
+        chose_type
+        ;;
+
+'')
+        showinfo "Your choice - '${install_choice}' is illegal"
+        showinfo "Please chose either L (Livecd) or I (Install)"
+        echo ""
+        sleep 2
+        chose_type	
+        ;;
+
+esac
+
+}
+
+chose_type
+

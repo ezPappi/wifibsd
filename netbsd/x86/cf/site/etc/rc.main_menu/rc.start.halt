@@ -1,0 +1,157 @@
+#!/bin/sh
+
+SHELL=/bin/sh
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+
+stty status '^T'
+
+# Make sure the user can't kill us by pressing Ctrl-C
+trap : 2
+trap : 3
+trap : 4
+
+
+take_backup() {
+	        # Preserve admin's history file and ssh keys
+                echo "Taking backup ..."
+                if [ -f /root/.history ]; then
+                        mv /root/.history /disk/backup/root/
+                fi
+
+                if [ -f /disk/ftp/authorized_keys2 ]; then
+                        cat /disk/ftp/authorized_keys2 >> /root/.ssh/authorized_keys2
+                fi
+
+                if [ -f /disk/ftp/id_dsa ]; then          
+                        cat /disk/ftp/id_dsa >> /root/.ssh/id_dsa                    
+                fi
+
+                if [ -f /root/.ssh/authorized_keys2 ]; then
+                        cp /root/.ssh/authorized_keys2 /disk/backup/root/
+                fi
+
+                if [ -f /root/.ssh/id_dsa ]; then          
+                        cp /root/.ssh/id_dsa /disk/backup/root/          
+                fi
+
+                if [ -f /root/.ssh/known_hosts ]; then
+                        cp /root/.ssh/known_hosts /disk/backup/root/
+                fi
+
+
+#                if [ -d /disk/backup/etc ] ; then
+#                        if [ -f /etc/passwd ] ; then
+#                                cp /etc/passwd /disk/backup/etc/
+#                        fi
+#                        if [ -f /etc/master.passwd ] ; then
+#                                cp /etc/master.passwd /disk/backup/etc/
+#                        fi
+#                        if [ -f /etc/pwd.db ] ; then
+#                                cp /etc/pwd.db /disk/backup/etc/
+#                        fi
+#                        if [ -f /etc/spwd.db ] ; then
+#                                cp /etc/spwd.db /disk/backup/etc/
+#                        fi
+#                        else
+#                                echo
+#                                echo "We had problems with backing up password the databases !"
+#                                echo
+#                                sleep 3
+#                fi
+
+		echo "Done"
+		echo
+	}
+
+update_system() {
+		# Check here if the /wifibsd and /disk partitions are already mounted.
+		# Mount them if not.
+	        #       (mount | grep "\/wifibsd" || mount /wifibsd ) > /dev/null 2>&1
+	        #       (mount | grep "\/disk" || mount /disk ) > /dev/null 2>&1    
+
+		# Add/Append the uploaded public SSH key(s) if existing
+			if [ -f /disk/ftp/authorized_keys2 ]; then
+				cat  /disk/ftp/authorized_keys2 >> /root/.ssh/authorized_keys2
+			fi
+
+		# Backup admin's files. They will get restored after system starts again.
+			take_backup
+
+		# Check if there is something to upgrade. 
+			if [ ! -f /disk/ftp/wifibsd.pkg ]; then
+				halt_me
+			fi
+
+		if [ -f /disk/ftp/wifibsd.pkg ]; then		
+			clear
+			echo 
+			echo "Upgrading your system"
+			echo "Please hold on ..."
+			echo
+
+		cd  /disk/ftp
+        # Test the package.
+                echo "Checking the firmware ..."
+                echo
+                gzip -t wifibsd.pkg >/dev/null 2>&1 
+
+        # Proceed if the package is OK. Zero status indicates the package was good.
+                if [ "$?" = "0" ]; then
+                        # Replace that part with mtree!
+                        mv -f wifibsd.pkg /wifibsd.tgz
+                        cd /
+                        tar -zxf wifibsd.tgz
+                        rm -f wifibsd.tgz
+                        cp -RPf site/* .
+                        cp site/.profile .
+                        rm -rf site
+                        #umount /wifibsd
+                        echo "Firmware upgrade successfully completed!"
+                        echo
+                        halt_me
+		fi
+	fi
+	}
+	
+
+halt_me() {
+	echo "Your system will halt now."
+	echo "Please hold on ..."
+	echo
+	/sbin/shutdown -h now
+	}
+
+
+checkyesno()
+	{
+        echo "Are you sure you want to halt the system? [y/N]:"
+	read -p "Enter your choice: " halt_choice
+	echo
+
+	case ${halt_choice} in
+
+[Yy]|[Yy][Ee][Ss])
+        #exit && exit && logout
+	update_system
+	return 0
+        ;;
+
+[Nn]|[Nn][Oo])
+	#clear
+        /bin/tcsh
+	return 1
+        ;;
+
+*)
+
+	echo "Your choice - '${halt_choice}' is illegal"
+	echo "Please chose either Y (yes) or N (no)"
+	echo
+	checkyesno
+	return 1
+	;;
+
+esac
+	}
+
+checkyesno

@@ -1,0 +1,23 @@
+#!/bin/sh
+
+name="syslogd"
+rcvar=$name
+command="/usr/sbin/${name}"
+conf_file="/etc/syslog.conf"
+
+syslogd_check()
+{
+	(
+	umask 022
+	if [ -f ${conf_file} ]; then
+		${command} -s -f ${conf_file} -P /var/run/syslogd.sockets
+	else
+		echo "Syslog config file is unavaliable!"
+		echo "Please create ${conf_file}."
+		echo "The ${name} did not start."
+	fi
+	)
+}
+
+echo "Starting syslogd..."
+syslogd_check

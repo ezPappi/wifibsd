@@ -1,0 +1,17 @@
+#!/bin/sh
+
+# Start DHCP client
+
+IFACES=`ifconfig -l`
+
+for x in ${IFACES} ; do
+        # Display only output equal 3 chars, e.g ath0
+        if [ ${#x} > 3 ]; then
+                case ${x} in
+                ath0)
+                        dhclient -q ath0
+                ;;
+                esac
+        fi
+done
+

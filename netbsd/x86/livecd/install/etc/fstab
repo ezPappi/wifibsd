@@ -1,0 +1,10 @@
+/dev/md0a       /               ffs     rw,noatime             				0	0
+#swap		/etc		mfs	rw,-s=2m,noatime				0	0
+#swap		/usr		mfs	rw,-s=32768,noatime				0	0
+swap            /var            mfs     rw,-s=15m,nodev,nosuid,noatime  		0       0
+swap		/tmp		mfs	rw,noatime,noexec,nosuid,noatime,-s=16m		0	0
+#swap		/root		mfs	rw,-s=5m,noatime				0	0
+kernfs          /kern           kernfs  rw                              		0       0
+procfs          /proc           procfs  rw                              		0       0
+/dev/cd0a       /cdrom          cd9660  ro		        			0       0
+

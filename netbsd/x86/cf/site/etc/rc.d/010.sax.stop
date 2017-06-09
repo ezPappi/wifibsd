@@ -1,0 +1,42 @@
+#!/bin/sh
+
+echo ""
+echo "Starting up Sax.."
+echo ""
+
+# Some variables:
+SAX="/usr/local/sbin/gwsax"
+
+cd /dev
+./MAKEDEV tap0 tap1
+ifconfig tap0 create
+ifconfig tap1 create
+
+sax_start()
+{
+ifconfig bridge0 create
+ifconfig bridge1 create
+
+IFACES=`ifconfig -l`
+for x in ${IFACES} ; do
+        # Display only output equal 4 chars, e.g ath0
+        if [ ${#x} > 3 ]; then
+              case ${x} in
+              sk0)
+                brconfig bridge0 add ${x} -stp ${x} add tap0 -stp tap0 up
+                ifconfig tap0 up
+                ifconfig ${x} up
+                ;;
+              fxp0)
+                brconfig bridge1 add ${x} -stp ${x} add tap1 -stp tap1 up
+                ifconfig tap1 up
+                ifconfig ${x} up
+
+                esac
+        fi
+done
+}
+
+# Fire up SAX process
+${SAX} &
+

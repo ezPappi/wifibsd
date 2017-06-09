@@ -1,0 +1,152 @@
+# Kernel config for WIFIBSD-net45x1
+
+machine		i386
+cpu		I486_CPU
+
+ident		WIFIBSD
+maxusers        0
+options		INCLUDE_CONFIG_FILE
+
+# To statically compile in device wiring instead of /boot/device.hints
+hints		"GENERIC.hints"		# Default places to look for devices.
+#hints           "WIFIBSD.hints"
+
+#FILE SYSTEMS
+options         FFS                             #Berkeley Fast Filesystem
+options		SOFTUPDATES                     #Enable FFS     soft updates support
+options         UFS_ACL                         #Support for access control lists
+options		UFS_DIRHASH                     #Improve performance on big     directories
+options         MD_ROOT                         #MD is a potential root device
+options		PROCFS                          #Process filesystem (requires PSEUDOFS)
+options		PSEUDOFS                        #Pseudo-filesystem framework
+options		NO_SWAPPING
+options 	GEOM_GPT			#GUID Partition Tables.
+options         GEOM_UZIP
+
+options         COMPAT_43                       #Compatible with BSD 4.3 [KEEP THIS!]
+options         COMPAT_FREEBSD4                 #Compatible with FreeBSD4
+options         SYSVSHM                         #SYSV-style     shared memory
+options         SYSVMSG                         #SYSV-style     message queues
+options         SYSVSEM                         #SYSV-style     semaphores
+options         _KPOSIX_PRIORITY_SCHEDULING     #Posix P1003_1B real-time extensions
+options         SCHED_4BSD                      #4BSD scheduler
+						# output.  Adds ~215k to driver.
+options 	ADAPTIVE_GIANT			# Giant mutex is adaptive.
+
+# General Soekris.
+options         CPU_SOEKRIS			# Recommended - Set up things for soekris board i.e. /dev/led/error
+
+#Soekris 4801 specific
+options         CPU_GEODE                       # Adds a "Geode" timecounter which is better than i8254
+
+#Soekris 45xx (Net4501, Net4511, Net4521) specific
+options		CPU_ELAN			# Mandatory - Work around for the ElanSC520 CPU.
+options		HZ=250				# Increase HZ to at least 150 in order to take advantage of the "ELAN" timecounter.
+options		CPU_ELAN_XTAL=32768000		# Set the frequency of CPU xtal.
+
+# Do not enable this option. Soekris will not boot!
+#options		CPU_ELAN_PPS			# Enable support for precision timestamping on an external signal.
+
+# Bus support.  Do not remove isa, even if you have no isa slots
+device		isa
+device		pci
+
+# Hardware-accelerated IP Security Protocols
+options		FAST_IPSEC
+device		crypto
+device		cryptodev
+device		hifn
+
+# ATA and ATAPI devices
+device		ata
+device		atadisk				# ATA disk drives
+options 	ATA_STATIC_ID			# Static device numbering
+
+device		vga				# VGA video card driver
+device          atkbdc                  	# AT keyboard controller
+device          atkbd                   	# AT keyboard
+
+# syscons is the default console driver, resembling an SCO console
+device		sc
+options         SC_DISABLE_REBOOT       # Disable the ALT+CTRL+DEL key sequence
+
+# Floating point support - do not disable.
+device		npx
+
+# Add suspend/resume support for the i8254.
+device		pmtimer
+
+# Serial (COM) ports
+device		sio				# 8250, 16[45]50 based serial ports
+
+# PCI Ethernet NICs that use the common MII bus controller code.
+# NOTE: Be sure to keep the 'device miibus' line in order to use these NICs!
+device		miibus				# MII bus support
+device		sis				# Silicon Integrated Systems SiS 900/SiS 7016
+
+# The `bpf'     pseudo-device enables the Berkeley Packet Filter.
+# Be aware of the administrative consequences of enabling this!
+device  bpf             #Berkeley packet filter
+
+#GENERAL NETWORK OPTIONS
+options         INET                    	# InterNETworking
+options         INET6                   	# IPv6 communications protocols
+options         TCPDEBUG
+options         TCP_DROP_SYNFIN         	# Drop TCP packets with SYN+FIN
+options         IPSTEALTH               	# To hide firewall from traceroute, support for stealth forwarding
+options         ZERO_COPY_SOCKETS       	# Speeds up inet stuff, man zero_copy
+options         BRIDGE
+
+# Carp - Common Address Redundancy Protocol
+#device		carp
+
+device		vlan
+
+# WaveLAN/IEEE 802.11 wireless NICs.
+options         WLCACHE
+options         WLDEBUG
+
+device		wlan				# 802.11 Support
+device		wi				# Lucent Hermes, Intersil PRISM-II/2.5/3, and Symbol Spectrum24 chipsets
+device          wl                      	# Older non 802.11 Wavelan wireless NIC.
+device		ath				# Atheros AR5211/AR5212 802.11 b/g/a wireless NICS.
+device		ath_hal				# Atheros Hardware Abstraction Layer.
+device		an				# Aironet 4500/4800 802.11 wireless NICs.
+device		awi				# BayStack 660 and others
+
+#FIREWALLING PF & ALTQ
+device          pf
+device          pflog
+device          pfsync
+
+options         ALTQ
+options         ALTQ_CBQ
+options         ALTQ_RED
+options         ALTQ_RIO
+options         ALTQ_HFSC
+options         ALTQ_CDNR
+options         ALTQ_PRIQ
+options         ALTQ_NOPCC
+options         ALTQ_DEBUG
+
+# Pseudo devices.
+device		loop				# Network loopback
+device		random				# Entropy device
+device		ether				# Ethernet support
+device		sl				# Kernel SLIP
+device		ppp				# Kernel PPP
+device		tun				# Packet tunnel.
+device		pty				# Pseudo-ttys (telnet etc)
+device		md				# Memory "disks"
+device		gif				# IPv6 and IPv4 tunneling
+device		faith				# IPv6-to-IPv4 relaying (translation)
+device		mem				# Memory and kernel memory devices
+device		io				# I/O device
+
+# NetGraph
+options		NETGRAPH			#netgraph(4) system
+options		NETGRAPH_ETHER
+options		NETGRAPH_PPPOE
+options		NETGRAPH_SOCKET
+
+

@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!-- wifibsd service configuration -->
+<service>
+	<name>SSH</name>
+	<status>Enabled</status>
+	<description>SSH server</description>
+	<provides>SSH</provides>
+	<port>22</port>
+	<messages>
+		<start>Starting SSH server</start>
+		<stop>Stopping SSH server</stop>
+	</messages>
+	<requires>Login</requires>
+	<uses>Network</uses>
+	<orderpreference>Last</orderpreference>
+</service>

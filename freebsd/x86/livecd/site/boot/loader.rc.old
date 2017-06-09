@@ -1,0 +1,2 @@
+load /boot/kernel/kernel
+load -t mfs_root /mfsroot

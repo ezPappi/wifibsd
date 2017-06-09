@@ -1,0 +1,25 @@
+# /dev/rwd0d:
+type: unknown
+disk: main
+label: 
+flags:
+bytes/sector: 512
+sectors/track: ${BSEC}
+tracks/cylinder: ${DLHEAD}
+sectors/cylinder: 1008
+cylinders: ${DLCYL}
+total sectors: ${DLSIZE}
+rpm: 3600
+interleave: 1
+trackskew: 0
+cylinderskew: 0
+headswitch: 0		# microseconds
+track-to-track seek: 0	# microseconds
+drivedata: 0 
+
+16 partitions:
+#        size    offset     fstype [fsize bsize cpg/sgs]
+ a:  ${P0SIZE}  ${BSEC}     4.2BSD   1024  8192 46640  # (Cyl.      0*-  37750*)
+ d:  ${DLSIZE}        0     unused      0     0        # (Cyl.      0 -  38791)
+
+

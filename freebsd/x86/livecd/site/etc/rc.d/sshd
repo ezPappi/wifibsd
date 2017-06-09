@@ -1,0 +1,61 @@
+#!/bin/sh
+#
+# $NetBSD: sshd,v 1.18 2002/04/29 08:23:34 lukem Exp $
+# $FreeBSD: src/etc/rc.d/sshd,v 1.3 2003/07/13 01:49:07 mtm Exp $
+#
+
+# WifiBSD SSHD rc.d script
+
+# PROVIDE: sshd
+# REQUIRE: LOGIN
+# KEYWORD: FreeBSD NetBSD
+
+. /etc/rc.subr
+
+name="sshd"
+rcvar=`set_rcvar`
+keygen_cmd="sshd_keygen"
+start_precmd="sshd_precmd"
+pidfile="/var/run/${name}.pid"
+extra_commands="keygen reload"
+
+
+SSHKEYGEN=${SSHKEYGEN:-"/usr/bin/ssh-keygen"}
+SSHKEYPATH=${SSHKEYPATH:-"/etc/ssh/"}
+
+
+[ -d ${SSHKEYPATH} ] || mkdir -p ${SSHKEYPATH}
+
+sshd_keygen()
+{
+	# Can not do anything if ssh-keygen is absent.
+	[ -x ${SSHKEYGEN} ] || {
+		warn "/usr/bin/ssh-keygen does not exist."
+		return 1
+	}
+
+	(			# notice the parens, a subshell to contain the umask.
+	umask 277	# Create new keys to they are readable only by root.
+
+	[ -f ${SSHKEYPATH}/ssh_host_key ] || \
+	${SSHKEYGEN} -t rsa1 -b 1024 -f ${SSHKEYPATH}/ssh_host_key -N ''
+
+	[ -f ${SSHKEYPATH}/ssh_host_dsa_key ] || \
+	${SSHKEYGEN} -t dsa -f ${SSHKEYPATH}/ssh_host_dsa_key -N ''
+
+	[ -f ${SSHKEYPATH}/ssh_host_rsa_key ] || \
+	${SSHKEYGEN} -t rsa -f ${SSHKEYPATH}/ssh_host_rsa_key -N ''
+	)			# EO subshell.
+}
+
+sshd_precmd()
+{
+	if [ ! -f ${SSHKEYPATH}/ssh_host_key -o \
+		! -f ${SSHKEYPATH}/ssh_host_dsa_key -o \
+		! -f ${SSHKEYPATH}/ssh_host_rsa_key ]; then
+		run_rc_command keygen
+	fi
+}
+
+load_rc_config $name
+run_rc_command "$1"

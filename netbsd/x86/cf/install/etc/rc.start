@@ -1,0 +1,219 @@
+#!/bin/sh
+
+SHELL=/bin/sh
+PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/libexec
+TERM=wsvt25
+BLOCKSIZE=1k
+export PATH
+export TERM
+export BLOCKSIZE
+PWD_PATH=`pwd`
+
+. /etc/colors.disp
+
+stty status '^T'
+
+# Make sure the user can't kill us by pressing Ctrl-C
+trap : 2
+trap : 3
+trap : 4
+
+prog=${0##*/}
+DSK=wd0
+label=/etc/label
+os_version=wifiBSD
+
+# ====================================================================== #
+#                               My functions :                           #
+# ====================================================================== #
+
+showmsg()
+{
+        echo "${YELLOW}===> $@${NORMAL}"
+}
+
+showerr()
+{
+        echo "${RED}===> $@${NORMAL}"
+}
+
+showquest()
+{
+        echo "${GREEN}===> $@${NORMAL}"
+}
+
+showinfo()
+{
+        echo "${BLUE}===> $@${NORMAL}"
+}
+
+partition_disk(){
+
+#Check the size of our disk from dmesg.boot
+#SZ=`grep ${DSK} /var/run/dmesg.boot | sed -n -e's/.* \([0-9][0-9]*\) sectors$/\1/p'`
+#SZ0=`expr ${SZ}-63` 
+
+#showmsg "Wiping out your old MBR."
+        dd if=/dev/zero of=/dev/r${DSK}d bs=8k count=1 2>/dev/null
+
+# Install bootstrapping code.
+	/usr/sbin/installboot -v -m i386 -o timeout=3,console=com0 -t ffs /dev/r${DSK}a /bin/bootxx_ffsv1 1>/dev/null 2>&1
+
+echo ""
+showmsg "Creating partitions on your primary drive..."
+
+eval `fdisk -S ${DSK} 2>/dev/null`
+DLCYL=${DLCYL}
+DLHEAD=${DLHEAD}
+DLSEC=${DLSEC}
+DLSIZE=${DLSIZE}
+BCYL=${BCYL}
+BHEAD=${BHEAD}
+BSEC=${BSEC}
+PART0ID=${PART0ID}
+PART0SIZE=${PART0SIZE}
+PART0START=${PART0START}
+PART0FLAG=${PART0FLAG}
+PART0BCYL=${PART0BCYL}
+PART0BHEAD=${PART0BHEAD}
+PART0BSEC=${PART0BSEC}
+PART0ECYL=${PART0ECYL}
+PART0EHEAD=${PART0EHEAD}
+PART0ESEC=${PART0ESEC}
+PART1SIZE=${PART1SIZE}
+PART2SIZE=${PART2SIZE}
+PART3SIZE=${PART3SIZE}
+
+PART0START=${BSEC}
+P0SIZE=$((${DLSIZE}-${PART0START}))
+PART0ID=169
+
+#
+# Create disk label /etc/label
+#
+echo "# /dev/r${DSK}d:" > ${label} 2>/dev/null
+echo "type: unknown" >> ${label} 2>/dev/null
+echo "disk: wifibsd" >> ${label} 2>/dev/null
+echo "label: fictitious" >> ${label} 2>/dev/null
+echo "flags:" >> ${label} 2>/dev/null
+echo "bytes/sector: 512" >> ${label} 2>/dev/null
+echo "sectors/track: ${BSEC}" >> ${label} 2>/dev/null
+echo "tracks/cylinder: ${DLHEAD}" >> ${label} 2>/dev/null
+echo "sectors/cylinder: 1008" >> ${label} 2>/dev/null
+echo "cylinders: ${DLCYL}" >> ${label} 2>/dev/null
+echo "total sectors: ${DLSIZE}" >> ${label} 2>/dev/null
+echo "rpm: 3600" >> ${label} 2>/dev/null
+echo "interleave: 1" >> ${label} 2>/dev/null
+echo "trackskew: 0" >> ${label} 2>/dev/null
+echo "cylinderskew: 0" >> ${label} 2>/dev/null
+echo "headswitch: 0           # microseconds" >> ${label} 2>/dev/null
+echo "track-to-track seek: 0  # microseconds" >> ${label} 2>/dev/null
+echo "drivedata: 0" >> ${label} 2>/dev/null
+echo "" >> ${label} 2>/dev/null
+echo "4 partitions:" >> ${label} 2>/dev/null
+echo "#        size    offset     fstype [fsize bsize cpg/sgs]" >> ${label} 2>/dev/null
+echo " a:  ${P0SIZE}        ${BSEC}     4.2BSD      0     0     0  # (Cyl.      0 -     25*)" >> ${label} 2>/dev/null
+echo " d:  ${DLSIZE}         0     unused      0     0        # (Cyl.      0 -     25*)" >> ${label} 2>/dev/null
+echo "" >> ${label} 2>/dev/null
+
+#
+#  Label the disk
+#
+	disklabel -R -r ${DSK} ${label} 1>/dev/null 2>&1
+
+#
+#  Create new file system
+#
+	newfs -m 0 /dev/${DSK}a 1>/dev/null 2>&1
+
+#
+# Run fsck on created filesystem and mount it
+#
+        mount_ffs /dev/${DSK}a /mnt 1>/dev/null 2>&1 || \
+        fsck_ffs -y /dev/${DSK}a 1>/dev/null 2>&1 && mount_ffs /dev/${DSK}a /mnt 1>/dev/null 2>&1 || \
+        fsck_ffs -f -y /dev/${DSK}a 1>/dev/null 2>&1
+        showinfo "Successfully finished partitioning your drive."
+
+#Some debugging:
+#disklabel ${DSK} > /tmp/dsklabel.$$
+#cat /tmp/dsklabel.$$ 
+#fdisk -S ${DSK}
+#df -h
+
+#else
+#        showerr "There was a problem installing boot sector on your drive !"
+#fi
+
+copy_system
+}
+
+copy_system(){
+	echo ""
+	showmsg "Installing wifibsd to the installation disk..."
+	showmsg "Please hold on ..."
+	echo ""
+
+if [ -f /site.tar.gz ]; then
+	#progress -l 120g -zpf site.tar.gz tar xf -
+	tar -zxpf /site.tar.gz -C /mnt 
+	cd /mnt/site && find . | cpio -vupdm /mnt 1>/dev/null 2>&1
+	cd .. ; rm -rf site/
+
+if [ "$?" = "0" ]; then
+	showinfo "Finished installing."
+        showmsg "Rebooting system to reinitialize wifibsd..."
+	showmsg "Please hold on ..."
+	echo ""
+        /sbin/reboot -ql 
+fi
+else
+	echo ""
+        showerr "File system with wifiBSD is MISSING!"
+	showerr "The system could not be copied to your drive."
+	echo ""
+fi
+
+}
+
+checkyesno(){
+        showquest "You primary disk will be entirely erased."
+        showquest "Are you sure you want to"
+        showquest "install wifiBSD on your drive? [Y/N]:"
+        read -p "`showmsg Enter your choice:` " install_choice
+        echo ""
+
+        case ${install_choice} in
+
+[Yy]|[Yy][Ee][Ss])
+	partition_disk
+        return 0
+        ;;
+
+[Nn]|[Nn][Oo])
+	showmsg "You chose not to install ${os_version}"
+	showmsg "Your system will reboot now ..."
+        /sbin/reboot -ql 
+        return 1
+        ;;
+
+*)
+        showinfo "Your choice - '${install_choice}' is illegal"
+        showinfo "Please chose either Y (yes) or N (no)"
+        echo ""
+        checkyesno
+        return 1
+        ;;
+	
+esac
+}
+
+	clear
+	echo ""
+
+###
+### Check wether we want to partition our drive or not
+###
+checkyesno
+
+partition_disk
+

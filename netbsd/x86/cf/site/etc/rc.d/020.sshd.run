@@ -1,0 +1,58 @@
+#!/bin/sh
+
+name="sshd"
+rcvar=$name
+command="/usr/sbin/${name}"
+conf_dir="/etc/ssh"
+ssh_keygen_flags=""
+
+sshd_keygen()
+{
+	echo "Starting SSH ..."
+	(
+	umask 022
+	if [ -f ${conf_dir}/ssh_host_key ]; then
+	#	echo "You already have an RSA host key" \
+	#	    "in ${conf_dir}/ssh_host_key"
+	#	echo "Skipping protocol version 1 RSA Key Generation"
+	else
+		echo "Generating SSH version 1 RSA host key..."
+		/usr/bin/ssh-keygen -t rsa1 ${ssh_keygen_flags} \
+		    -f ${conf_dir}/ssh_host_key -N '' 1>/dev/null 2>&1
+	fi
+
+	if [ -f ${conf_dir}/ssh_host_dsa_key ]; then
+	#	echo "You already have a DSA host key" \
+	#	    "in ${conf_dir}/ssh_host_dsa_key"
+	#	echo "Skipping protocol version 2 DSA Key Generation"
+	else
+		echo "Generating SSH DSA host key..."
+		/usr/bin/ssh-keygen -t dsa ${ssh_keygen_flags} \
+		    -f ${conf_dir}/ssh_host_dsa_key -N '' 1>/dev/null 2>&1
+	fi
+
+	if [ -f ${conf_dir}/ssh_host_rsa_key ]; then
+	#	echo "You already have a RSA host key" \
+	#	    "in ${conf_dir}/ssh_host_rsa_key"
+	#	echo "Skipping protocol version 2 RSA Key Generation"
+	else
+		echo "Generating SSH version 2 RSA key ..." 
+		/usr/bin/ssh-keygen -t rsa ${ssh_keygen_flags} \
+		    -f ${conf_dir}/ssh_host_rsa_key -N '' 1>/dev/null 2>&1
+	fi
+	)
+}
+
+sshd_precmd()
+{
+	if [ ! -f /etc/ssh/ssh_host_key -o \
+	    ! -f /etc/ssh/ssh_host_dsa_key -o \
+	    ! -f /etc/ssh/ssh_host_rsa_key ]; then
+		echo "Creating SSH Keys ..."
+		sshd_keygen
+	fi
+}
+
+sshd_keygen
+${command} 
+# ${command} -f ${conf_dir}/sshd_config

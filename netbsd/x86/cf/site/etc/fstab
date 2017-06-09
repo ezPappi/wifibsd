@@ -1,0 +1,11 @@
+# Device        Mountpoint      FStype  Options         		Dump    Pass#
+/dev/wd0a       /               ffs     rw	     			1 	1
+#swap            /var    	mfs     rw,-s=16m,nodev,nosuid,noatime	0 	0
+tmpfs           /var            tmpfs   rw,-s=16M			0       0
+kernfs          /kern           kernfs  rw				0 	0
+procfs          /proc           procfs  rw	        		0 	0
+/dev/cd0a       /cdrom          cd9660  ro,noauto       		0 	0
+/dev/fd0a       /floppy         msdos   rw,noauto       		0 	0
+#fdesc           /dev            fdesc   rw,union			0 	0
+
+

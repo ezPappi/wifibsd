@@ -1,0 +1,36 @@
+#!/bin/sh
+
+### Start user config ###
+# Change those values as pleased:
+SSID="dcaccess"
+MODE_ATH0="11b"
+MODE_WI0="11b"
+CHAN_ATH0="1"
+CHAN_WI0="6"
+MEDIAOPT="adhoc"
+IP_ATH0="192.168.1.1"
+IP_WI0="192.168.2.1"
+
+### End user config ###
+IFACES=`ifconfig -l`
+
+for x in ${IFACES} ; do
+        # Display only output equal 3 chars, e.g ath0
+        if [ ${#x} > 3 ]; then
+                case ${x} in
+                sip0)
+                        ifconfig sip0 inet 192.168.100.1 netmask 255.255.255.0 up
+                ;;
+		ath0)
+			ifconfig ath0 ssid ${SSID} mode ${MODE_ATH0} 
+                        #ifconfig ath0 inet ${IP_ATH0} ssid ${SSID} mode ${MODE_ATH0} chan ${CHAN_ATH0} mediaopt ${MEDIAOPT} up
+                ;;
+                wi0)
+                        ifconfig wi0 inet ${IP_WI0} ssid ${SSID} mode ${MODE_WI0} chan ${CHAN_WI0} mediaopt ${MEDIAOPT} up
+                ;;
+                *)
+                        ifconfig ${x} up
+                ;;
+                esac
+        fi
+done

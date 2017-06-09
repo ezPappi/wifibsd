@@ -1,0 +1,125 @@
+#!/bin/sh
+# Load/Stop iwi and ipw firmware, show stats and avaliable networks.
+
+# make sure the user can't kill us by pressing Ctrl-C
+trap : 2
+trap : 3
+trap : 4
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/libexec
+
+FIRMWARE=/usr/local/firmware
+
+# Load iwi firmware in BSS mode (connection to access point).
+load_iwi_firmware_bss() {
+
+iwictl -i iwi0 -d ${FIRMWARE}/if_iwi -m bss
+# zero status indicates the command was successful, 255 indicates failure.
+        if [ "$?" = "0" ]
+            then
+	echo 
+	iwictl -i iwi0 -r
+	echo "Firmware successfully loaded."
+	sleep 2
+        else
+        # Something failed, display error log
+	echo "Error loading iwi firmware!"
+	sleep 2
+fi
+	}
+
+# Show iwi stats:
+iwi_stats(){
+	iwictl -i iwi0
+}
+
+# Kill the firmware and reset adapter
+iwi_stop(){
+	iwictl -i iwi0 -k
+	        if [ "$?" = "0" ]
+            then
+        echo "Firmware successfully unloaded."
+        sleep 2
+        else
+        # Something failed, display error log
+        echo "Error unloading iwi firmware!"
+        sleep 2
+fi
+
+}
+
+load_ipw_firmware() {
+
+ipwctl -i ipw0 -f ${FIRMWARE}/ipw2100-1.2.fw 
+#ipw2100-1.2-i.fw  IBSS mode (point-to-point connection)
+#ipw2100-1.2-p.fw  Monitor mode
+#ipw2100-1.2.fw	   BSS mode (connection to access point)
+
+# zero status indicates the command was successful, 255 indicates failure.
+        if [ "$?" = "0" ]
+            then
+	echo 
+	ipwctl -i ipw0 -r
+	echo "Firmware successfully loaded."
+	sleep 1
+        else
+        # Something failed, display error log
+	echo "Error loading iwi firmware!"
+fi
+	}
+
+# Show ipw stats:
+ipw_stats(){
+        ipwctl -i ipw0
+}
+
+# Kill the ipw firmware and reset adapter
+ipw_stop(){
+        ipwctl -i ipw0 -k
+}
+
+shell_menu()
+{
+echo ""
+read -p "Type in your choice - Startiwi[1], Stopiwi[2], Statsiwi[3], Startipw[4], Stopipw[5], Statsipw[6] : " choice
+
+       case ${choice} in
+        [Ss][Tt][Aa][Rr][Tt][Ii][Ww][Ii]|1)
+                # Start the iwi network interface
+		load_iwi_firmware_bss
+                ;;
+        [Ss][Tt][Oo][Pp][Ii][Ww][Ii]|2)
+                # Stop the network interface
+                iwi_stop
+                ;;
+
+        [Ss][Tt][Aa][Tt][Ss][Ii][Ww][Ii]|3)
+                # Stop the network interface
+                iwi_stats
+                ;;
+
+        [Ss][Tt][Aa][Rr][Tt][Ii][Pp][Ww]|4)
+                # Start the iwi network interface
+		load_ipw_firmware_bss
+                ;;
+        [Ss][Tt][Oo][Pp][Ii][Pp][Ww]|5)
+                # Stop the network interface
+                ipw_stop
+                ;;
+
+        [Ss][Tt][Aa][Tt][Ss][Ii][Pp][Ww]|6)
+                # Stop the network interface
+                ipw_stats
+                ;;
+
+                '')
+                echo "Please type in one of following values listed above."
+                ;;
+
+                *)
+                echo "Please type in one of following values listed above."
+                ;;
+        esac
+}
+
+shell_menu

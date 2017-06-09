@@ -1,0 +1,3 @@
+/dev/md0a       /               ffs     rw              0	0
+#/dev/md0a       /               tmpfs     rw              0	0
+

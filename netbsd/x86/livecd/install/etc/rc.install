@@ -1,0 +1,24 @@
+#!/bin/sh
+
+OS=`uname -s`
+
+check_os () {
+# Check detected O.S
+
+case ${OS} in
+NetBSD)
+	. /etc/install-nbsd
+        return 0
+        ;;
+
+FreeBSD)
+
+	. /etc/install-fbsd
+        return 0
+        ;;
+esac
+}
+
+check_os
+
+

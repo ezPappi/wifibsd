@@ -1,0 +1,23 @@
+#!/bin/sh
+
+SSID="VLAN"
+MODE="11a"
+CHAN="44"
+MEDIAOPT="adhoc"
+IP_ATH0="192.168.1.1"
+IFACES=`ifconfig -l`
+for x in ${IFACES} ; do
+        # Display only output equal 4 chars, e.g ath0
+        if [ ${#x} = 4 ]; then
+        ifconfig bridge0 create
+                case ${x} in
+                ath*)
+                        brconfig bridge0 add ${x} up
+                        ifconfig ath0 inet ${IP_ATH0} ssid ${SSID} mode ${MODE} chan ${CHAN} mediaopt ${MEDIAOPT} up
+                ;;
+                tlp*)
+                        brconfig bridge0 add ${x} up
+                        ifconfig ${x} up
+                esac
+        fi
+done

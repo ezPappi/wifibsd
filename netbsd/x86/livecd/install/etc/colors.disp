@@ -1,0 +1,40 @@
+# ======================================================== #
+#                          colors.disp                     #
+# ======================================================== #
+
+# Erase line to the end:
+CRE="[K"
+
+# Light colors
+DARKGRAY="[1;30m"
+RED="[1;31m"
+GREEN="[1;32m"
+YELLOW="[1;33m"
+BLUE="[1;34m"
+MAGENTA="[1;35m"
+CYAN="[1;36m"
+WHITE="[1;37m"
+LIGHTGRAY="[1;39m"
+
+# Dark colors
+DARKRED="[0;31m"
+DARKGREEN="[0;32m"
+BROWN="[0;33m"
+DARKBLUE="[0;34m"
+DARKMAGENTA="[0;35m"
+DARKCYAN="[0;36m"
+# DARKWHITE same effect as NORMAL
+NORMAL="[0m"
+
+# Background colors
+BGRED="[0;41m"
+BGGREEN="[0;42m"
+BGBROWN="[0;43m"
+BGBLUE="[0;44m"
+BGMAGENTA="[0;45"
+BGCYAN="[0;46m"
+INVERT="[0;49m"
+
+UNDERLINE="[4m"
+BLINKWHITE="[1;05m"
+BLINKGRAY="[0;05m"

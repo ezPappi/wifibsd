@@ -1,0 +1,13 @@
+#!/bin/sh
+
+not_avaliable() {
+	echo 
+	echo "This option is not avaliable yet"
+	echo
+	echo "Currently avaliable options: 0)"
+	echo
+	sleep 1
+#	clear
+	}
+
+not_avaliable

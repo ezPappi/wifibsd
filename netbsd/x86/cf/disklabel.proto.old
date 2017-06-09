@@ -1,0 +1,25 @@
+# /dev/rvnd0a:
+type: vnd
+disk: vnd
+label: fictitious
+flags:
+bytes/sector: 512
+sectors/track: 32
+tracks/cylinder: 64
+sectors/cylinder: 2048
+cylinders: 28
+total sectors: 57632
+rpm: 3600
+interleave: 1
+trackskew: 0
+cylinderskew: 0
+headswitch: 0           # microseconds
+track-to-track seek: 0  # microseconds
+drivedata: 0
+
+4 partitions:
+#        size    offset     fstype [fsize bsize cpg/sgs]
+ a:     16632         0     4.2BSD      0     0     0  # (Cyl.      0 -     25*)
+ b:     41000     16632     4.2BSD      0     0     0  # (Cyl.      0 -     25*)
+ d:     57632         0     unused      0     0        # (Cyl.      0 -     25*)
+

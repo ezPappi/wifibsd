@@ -1,0 +1,1599 @@
+#!/bin/sh -
+#
+# Generated from:
+#	NetBSD: MAKEDEV.awk,v 1.19 2007/12/10 17:57:24 garbled Exp 
+#	NetBSD: MAKEDEV.tmpl,v 1.113.2.6 2009/01/16 23:01:09 bouyer Exp 
+#	NetBSD: etc.i386/MAKEDEV.conf,v 1.16.2.3 2008/11/02 18:06:31 snj Exp 
+#
+# Copyright (c) 2003,2007,2008 The NetBSD Foundation, Inc.
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS
+# ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+# TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+# PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS
+# BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+#
+###########################################################################
+#
+#
+# Device "make" file.  Valid special arguments:
+#	all	makes all known devices, including local devices.
+#		Tries to make the 'standard' number of each type.
+#	init	A set of devices that is used for MFS /dev by init.
+#		May be equal to "all".
+#	floppy	devices to be put on install floppies
+#	ramdisk	devices to be put into INSTALL kernel ramdisks.
+#	std	standard devices
+#	local	configuration specific devices
+#	wscons	make wscons devices
+#	usbs	make USB devices
+#	isdns	make ISDN devices
+#
+
+#
+# NOTE:
+#
+# * MAKEDEV is used both as a standalone script (via "sh ./MAKEDEV
+#   all" or similar), and as a function library for MAKEDEV.local (via
+#   "MAKEDEV_AS_LIBRARY=1 . MAKEDEV").  Because of this, the script
+#   should consist almost entirely of function definitions, apart from a
+#   few lines right at the end.
+#
+# * MAKEDEV may be executed in an environment that is missing some
+#   common commands.  For example, it may be executed from a minimal
+#   system used during installation, or it may be executed early in the
+#   boot sequence before most file systems have been mounted.  It may
+#   also be executed in a cross-build environment on a non-NetBSD host.
+#
+
+usage()
+{
+	cat 1>&2 << _USAGE_
+Usage: ${0##*/} [-fMs] [-m mknod] [-p pax] [-t mtree] special [...]
+	Create listed special devices.  Options:
+	-f		Force permissions to be updated on existing devices.
+	-M		Create memory file system.
+	-m mknod	Name of mknod(8) program.  [\$TOOL_MKNOD or mknod]
+	-p pax  	Name of pax(1) program.  [\$TOOL_PAX or pax]
+	-s		Generate mtree(8) specfile instead of creating devices.
+	-t mtree	Name of mtree(8) program.  [\$TOOL_MTREE or mtree]
+
+_USAGE_
+	exit 1
+}
+
+# zeropad width number
+#	display number with a zero (`0') padding of width digits.
+#
+zeropad()
+{
+	case $(($1 - ${#2})) in
+	5)	echo 00000$2;;
+	4)	echo 0000$2;;
+	3)	echo 000$2;;
+	2)	echo 00$2;;
+	1)	echo 0$2;;
+	0)	echo $2;;
+	*)	die "bad padding" ;;
+	esac
+}
+
+# hexprint number
+#	display (base10) number as hexadecimal
+#
+hexprint()
+{
+	val="$(($1 + 0))"
+	hex=
+	set -- 0 1 2 3 4 5 6 7 8 9 a b c d e f
+	while [ "$val" -gt 0 ]; do
+		eval hex=\$$(($val % 16 + 1))\$hex
+		val="$(($val / 16))"
+	done
+	echo "${hex:-0}"
+}
+
+# linecount multiline_string
+#	count the number of lines in the string
+#
+linecount()
+{
+	local IFS='
+' # just a newline, no other white space between the quotes
+	set -- $1
+	echo $#
+}
+
+# nooutput -12 cmd [args...]
+#	run a command with stdout and/or stderr ignored.
+#	"nooutput -1 cmd" is like "cmd >/dev/null";
+#	"nooutput -2 cmd" is like "{ cmd ; } 2>/dev/null";
+#	"nooutput -12 cmd" is like "{ cmd ; } >/dev/null 2>&1";
+#	except they should work even if /dev/null doesn't [yet] exist.
+#
+#	The "{...}" wrapper used in cases where stderr is redirected
+#	serves to capture shell error messages such as "cmd: not found".
+#
+nooutput()
+{
+	local flags="$1" ; shift
+	local junk
+	case "$flags" in
+	"-1")	junk="$( "$@" )" ;;
+	"-2")	exec 4>&1 ; junk="$( { "$@" ; } 2>&1 1>&4 )" ; exec 4>&- ;;
+	"-12")	junk="$( { "$@" ; } 2>&1 )" ;;
+	*)	warn "Incorrect use of nooutput" ;;
+	esac
+}
+
+# check_pax path_to_pax
+#	Check whether pax exists and supports the command line options
+#	and input format that we will want to use.
+#
+check_pax()
+{
+	local pax="$1"
+	echo ". type=dir optional" | nooutput -12 "${pax}" -r -w -M -pe .
+}
+
+# check_mtree path_to_mtree
+#	Check whether mtree exists and supports the command line options
+#	and input format that we will want to use.
+#
+check_mtree()
+{
+	local mtree="$1"
+	echo ". type=dir optional" | nooutput -12 "${mtree}" -e -U
+}
+
+# setup args...
+#	Parse command line arguments, exit on error.
+#	Callers should shift $((OPTIND - 1)) afterwards.
+#
+setup()
+{
+	PATH=/sbin:/usr/sbin:/bin:/usr/bin:/rescue
+
+	: ${TOOL_MKNOD:=mknod}
+	: ${TOOL_MTREE:=mtree}
+	: ${TOOL_PAX:=pax}
+	do_create_mfs=false
+	do_force=false
+	do_mknod=false
+	do_pax=false
+	do_mtree=false
+	do_redirect=false
+	do_specfile=false
+	opts=
+	while getopts Mfm:p:st: ch; do
+		# Note that $opts is only for options pased through to
+		# MAKEDEV.local, not for all options.
+		case ${ch} in
+		M)
+			# "-M" sets do_create_mfs;
+			# "-M -M" is for use from init(8), and sets do_redirect
+			do_redirect=$do_create_mfs
+			do_create_mfs=true
+			;;
+		f)	do_force=true
+			opts="${opts} -f"
+			;;
+		m)	TOOL_MKNOD=${OPTARG}
+			do_mknod=true
+			opts="${opts} -m ${OPTARG}"
+			;;
+		p)	TOOL_PAX="${OPTARG}"
+			if check_pax "${TOOL_PAX}"; then
+				do_pax=true
+				# do not add this to $opts; we will later
+				# add "-s" instead.
+			else
+				warn "Ignored -p option:" \
+					"${TOOL_PAX} is missing or broken"
+				do_mknod=true
+			fi
+			;;
+		s)	do_specfile=true
+			opts="${opts} -s"
+			;;
+		t)	TOOL_MTREE="${OPTARG}"
+			if check_mtree "${TOOL_MTREE}"; then
+				do_mtree=true
+				# do not add this to $opts; we will later
+				# add "-s" instead.
+			else
+				warn "Ignored -t option:" \
+					"${TOOL_MTREE} is missing or broken"
+				do_mknod=true
+			fi
+			;;
+		*)	usage ;;
+		esac
+	done
+
+	shift $((${OPTIND} - 1))
+	[ $# -gt 0 ] || usage
+
+	u_root="0"
+	u_uucp="66"
+	g_kmem="2"
+	g_ntpd="15"
+	g_operator="5"
+	g_wheel="0"
+	dialin=0
+	dialout=524288
+	callunit=262144
+
+	# only allow read&write for owner by default
+	umask 077
+
+	# Set fdesc_mounted=true if the fdesc file system is mounted
+	# on the current directory (typically "/dev").
+	# Later, this will be used to suppress creation of device nodes
+	# that are supplied by the fdesc file system.
+	#
+	fdesc_mounted=false
+	if [ -d fd ]; then
+		# Parse the output from "mount -u -o nosuchoption .".
+		# We don't parse the output from df(1) because that's
+		# less likely to be available on install media.
+		#
+		# If the current directory is a mount point for the
+		# fdesc file system, then the expected output (whether
+		# or not the current user is root) is:
+		#	mount_fdesc: -o suchoption: option not supported.
+		#
+		# If the current directory is not a mount point, then
+		# the expected output is:
+		#	mount: .: unknown special file or file system.
+		#
+		# If we are not running on NetBSD, or mount(8) is not
+		# found, then we should get some other error message.
+		#
+		case "$({ LC_ALL=C mount -u -o nosuchoption . ; } 2>&1)" in
+		*mount_fdesc*)	fdesc_mounted=true ;;
+		esac
+	fi
+
+	# do_force requires mknod
+	if $do_force; then
+		if $do_mtree || $do_pax || $do_specfile; then
+			die "-f option works only with mknod"
+		fi
+		do_mknod=true
+	fi
+
+	# If no explicit method was specified on the command line or
+	# forced above, then use one of mtree, pax, or mknod, in that
+	# order of preference.
+	#
+	# mtree is preferred because it's fast and designed for the
+	# purpose.  However, it's unlikely to be available early in the
+	# boot sequence, when init(8) may invoke MAKEDEV(8).
+	#
+	# pax is usually acceptable, and it's likely to be available
+	# early in the boot sequence.  However, it's much slower than mtree.
+	#
+	# mknod is just very slow, because the shell has to fork for
+	# each device node.
+	#
+	if ! ( $do_mtree || $do_pax || $do_mknod || $do_specfile ); then
+		if check_mtree "${TOOL_MTREE}"; then
+			do_mtree=true
+		elif check_pax "${TOOL_PAX}"; then
+			do_pax=true
+		else
+			do_mknod=true
+		fi
+	fi
+
+	# Now we need exactly one node-creation method.
+	case $(( $($do_mtree && echo 1 || echo 0) + \
+		$($do_pax && echo 1 || echo 0) + \
+		$($do_mknod && echo 1 || echo 0) + \
+		$($do_specfile && echo 1 || echo 0) ))
+	in
+	1)	: OK ;;
+	*)	die "-m, -p, -s, and -t options are mutually exclusive" ;;
+	esac
+
+	# If we are using mknod, then decide what options to pass it.
+	if $do_mknod; then
+		MKNOD="${TOOL_MKNOD:-mknod} -F netbsd"
+		if $do_force; then
+			MKNOD="${MKNOD} -R"
+		else
+			MKNOD="${MKNOD} -r"
+		fi
+	fi
+
+	# do_mtree or do_pax internally implies do_specfile.
+	# This happens after checking for mutually-exclusive options.
+	if ($do_mtree || $do_pax) && ! $do_specfile; then
+		do_specfile=true
+		opts="${opts} -s"
+	fi
+}
+
+# wrap_makedev makedev_name ...
+#	Invoke a makedev-like function, with additional processing
+#	as appropriate for use from the outer level.
+#
+wrap_makedev()
+{
+	if $do_specfile; then
+		# "." must appear as the first line of the specfile.
+		# "optional" means do not create the directory itself.
+		echo ". type=dir optional"
+	fi
+	"$@"
+}
+
+# makedev_main makedev_name args...
+#	Perform most of the work of the main program.  makedev_name
+#	is typically "makedev", but may be the name of some other
+#	makedev-like function (if we are invoked from MAKEDEV.local or
+#	some other script).  The other args to this function are the
+#	command line args with which the MAKEDEV (or MAKEDEV.local)
+#	script was invoked.
+#
+makedev_main()
+{
+	local makedev="$1" ; shift
+
+	# Parse command line args
+	setup ${1+"$@"}
+	shift $((${OPTIND}-1))
+
+	if $do_create_mfs; then
+		# Count inodes and create mfs file system.
+		# The makedev call merely updates $count_nodes.
+		count_nodes=0
+		$makedev ${1+"$@"}
+		create_mfs_dev $count_nodes
+		unset count_nodes
+	fi
+
+	# If using mtree or pax, then wrap_makedev should print an mtree
+	# specification, which we postprocess to create the device nodes.
+	# Otherwise, wrap_makedev should do all the work itself.
+	if $do_mtree ; then
+		wrap_makedev $makedev ${1+"$@"} \
+		| nooutput -1 "${TOOL_MTREE}" -e -U
+	elif $do_pax ; then
+		wrap_makedev $makedev ${1+"$@"} \
+		| (
+		    # Run pax in an empty directory, so it pays
+		    # attention only to the specfile, without being
+		    # confused by the existing contents of the target
+		    # directory.  Without this, pax would complain "file
+		    # would overwrite itself" for already-existing
+		    # device nodes.
+		    tmpdir=./tmp.$$
+		    mkdir "${tmpdir}" || die "can't create temporary directory"
+		    cd "${tmpdir}" || die "can't cd to temporary directory"
+		    "${TOOL_PAX}" -r -w -M -pe ..
+		    status=$?
+		    cd .. # back to where we started
+		    rmdir "${tmpdir}"
+		    exit $status
+		)
+	else
+		wrap_makedev $makedev ${1+"$@"}
+	fi
+}
+
+#
+# functions available to create nodes:
+#
+# mkdev name [b|c] major minor [mode{=600} [gid{=0} [uid{=0}]]]
+#	create device node `name' with the appropriate permissions
+#
+# lndev src target
+#	create a symlink from src to target
+#
+# makedir dir mode
+#	create directory with appropriate mode
+#
+
+mkdev()
+{
+	if [ -n "$count_nodes" ]; then
+		count_nodes=$((count_nodes + 1))
+		return
+	fi
+	if $do_specfile; then
+		case $2 in
+		b)	type=block ;;
+		c)	type=char ;;
+		esac
+		echo "./$1 type=${type} device=netbsd,$3,$4 mode=${5:-600} gid=${6:-$g_wheel} uid=${7:-$u_root}"
+	else
+		${MKNOD} -m ${5:-600} -g \#${6:-$g_wheel} -u \#${7:-$u_root} $1 $2 $3 $4
+	fi
+}
+
+lndev()
+{
+	if [ -n "$count_nodes" ]; then
+		count_nodes=$((count_nodes + 1))
+		return
+	fi
+	if $do_specfile; then
+		echo "./$2 type=link link=$1 mode=0700 gid=$g_wheel uid=$u_root"
+	else
+		ln -f -s $1 $2
+	fi
+}
+
+makedir()
+{
+	if [ -n "$count_nodes" ]; then
+		count_nodes=$((count_nodes + 1))
+		return
+	fi
+	if $do_specfile; then
+		echo "./$1 type=dir mode=$2 gid=$g_wheel uid=$u_root"
+	else
+		nooutput -2 mkdir $1
+		chmod $2 $1
+	fi
+}
+
+warn()
+{
+	echo 1>&2 "$0: $*"
+}
+
+die()
+{
+	echo 1>&2 "$0: $*"
+	exit 1
+}
+
+# makedev special [...]
+#	the main loop
+#
+makedev()
+{
+
+for i
+do
+
+case $i in
+
+# As of 2005-03-15, the "init" case must not create more than 1024 entries.
+all_md)
+	makedev std wscons wt0 fd0 fd1
+	makedev wd0 wd1 wd2 wd3 wd4 wd5 wd6 wd7
+	makedev sd0 sd1 sd2 sd3 sd4
+	makedev tty0 tty1 tty2 tty3
+	makedev st0 st1 ch0 cd0 cd1 mcd0 vnd0
+	makedev bpf
+	makedev ccd0 md0 ch0 random
+	makedev cgd0 cgd1
+	makedev amr0 iop0 mlx0 mly0 dpti0 dpt0 twe0 icp0
+	makedev ed0 ed1
+	makedev raid0 raid1 raid2 raid3
+	makedev ld0 ld1 ld2 ld3
+	makedev xbd0 xbd1 xbd2 xbd3 xen
+	makedev usbs
+	makedev ipty
+	makedev local
+	makedev lpa0 lpa1 lpa2
+	makedev lpt0 lpt1 lpt2
+	makedev ss0 uk0 uk1
+	makedev speaker joy0 joy1
+	makedev apm satlink0
+	makedev cmos
+	makedev audio
+	makedev radio
+	makedev isdns
+	makedev music rmidi0 rmidi1 rmidi2 rmidi3 rmidi4 rmidi5 rmidi6 rmidi7
+	makedev scsibus0 scsibus1 scsibus2 scsibus3
+	makedev ses0 ses1 ses2 ses3
+	makedev sysmon
+	makedev bktr
+	makedev ttyCZ0 ttyCY0
+	makedev agp0
+	makedev pci0 pci1 pci2 pci3 pci4 pci5 pci6 pci7
+	makedev altq
+	makedev cir0 cir1 irframe0 irframe1
+	makedev dmoverio
+	makedev kttcp
+	makedev nsmb
+	makedev io
+	makedev bio
+	makedev cfs
+	makedev dk0 dk1 dk2 dk3 dk4 dk5 dk6 dk7
+	;;
+
+xen)
+	makedev xenevt xencons xsd_kva
+	;;
+
+floppy)
+	makedev std wt0 fd0 fd1 wd0 wd1 wd2 wd3 sd0 sd1 sd2 sd3 sd4 st0 st1
+	makedev tty0 tty1 tty2 cd0 cd1 mcd0 ttyv0 opty ld0 ld1 ld2 ld3 ed0 ed1
+	;;
+
+ramdisk)
+	makedev floppy md0
+	;;
+
+all)
+	makedev all_md
+	makedev std fd ptm pty0 pty1 pty2 pty3
+	makedev ccd0 ccd1 ccd2 ccd3
+	makedev cgd0 cgd1 cgd2 cgd3
+	makedev fss0 fss1 fss2 fss3
+	makedev md0 md1
+	makedev raid0 raid1 raid2 raid3 raid4 raid5 raid6 raid7
+	makedev vnd0 vnd1 vnd2 vnd3
+	makedev bpf
+	makedev tun0 tun1 tun2 tun3
+	makedev ipl pf crypto random
+	makedev lkm lockstat clockctl cpuctl
+	makedev atabus0 atabus1 atabus2 atabus3
+	makedev tap tap0 tap1 tap2 tap3
+	makedev gpio gpio0 gpio1 gpio2 gpio3 gpio4 gpio5 gpio6 gpio7
+	makedev pad pad0 pad1 pad2 pad3
+	makedev bthub
+	makedev putter
+	makedev drvctl
+	makedev video
+	makedev local # do this last
+	;;
+
+init)
+	# unless overridden by MD entry, this is equal to 'all'
+	makedev all
+	;;
+
+audio)
+	makedev audio0 audio1 audio2 audio3
+	makedev hdaudio0 hdaudio1 hdaudio2 hdaudio3
+	lndev sound0 sound
+	lndev audio0 audio
+	lndev mixer0 mixer
+	lndev audioctl0 audioctl
+	;;
+
+gpio)
+	makedev gpio0 gpio1 gpio2 gpio3 gpio4 gpio5 gpio6 gpio7
+	lndev gpio0 gpio
+	;;
+
+pad)
+	makedev pad0 pad1 pad2 pad3
+	lndev pad0 pad
+	;;
+
+radio)
+	makedev radio0 radio1
+	lndev radio0 radio
+	;;
+
+video)
+	makedev video0 video1 video2 video3
+	;;
+
+ramdisk)
+	makedev floppy md0
+	;;
+
+usbs)
+	makedev usb usb0 usb1 usb2 usb3 usb4 usb5 usb6 usb7
+	makedev uhid0 uhid1 uhid2 uhid3
+	makedev ulpt0 ulpt1
+	makedev ttyU0 ttyU1
+	makedev ttyY0 ttyY1
+	makedev urio0
+	makedev uscanner0 uscanner1
+	makedev utoppy0 utoppy1
+	makedev ugen0
+	;;
+
+isdns)
+	makedev isdn isdnctl isdnbchan0 isdnbchan1 isdntel0 isdntel1 isdnteld0 isdnteld1 isdntrc0 isdntrc1
+	;;
+
+std)
+	mkdev		console c 0 0	600
+	mkdev		constty c 0 1	600
+	mkdev		drum	c 4 0	640 $g_kmem
+	mkdev		kmem	c 2 1	640 $g_kmem
+	mkdev		mem	c 2 0	640 $g_kmem
+	mkdev		null	c 2 2	666
+	mkdev		zero	c 2 12	666
+	mkdev		klog	c 7 0	600
+	mkdev		ksyms	c 101 0 444
+	if ! $fdesc_mounted; then
+		mkdev	tty	c 1 0		666
+		mkdev	stdin	c 22 0	666
+		mkdev	stdout	c 22 1	666
+		mkdev	stderr	c 22 2	666
+	fi
+	;;
+
+usb)
+	mkdev usb c 55 255 444
+	;;
+
+usb*)
+	unit=${i#usb}
+	usb=usb$unit
+	mkdev usb$unit c 55 $unit
+	;;
+
+uhid*)
+	unit=${i#uhid}
+	mkdev uhid$unit c 56 $unit 666
+	;;
+
+ulpt*)
+	unit=${i#ulpt}
+	mkdev ulpt$unit c 57 $unit
+	mkdev ulpn$unit c 57 $(($unit + 64))
+	;;
+
+urio*)
+	unit=${i#urio}
+	mkdev urio$unit c 70 $unit 666
+	;;
+
+uscanner*)
+	unit=${i#uscanner}
+	mkdev uscanner$unit c 75 $unit
+	;;
+
+utoppy*)
+	unit=${i#utoppy}
+	mkdev utoppy$unit c 174 $unit
+	;;
+
+ttyY*)
+	unit=${i#ttyY}
+	mkdev ttyY$unit c 172 $(($unit + $dialin  )) "" "" $u_uucp
+	mkdev dtyY$unit c 172 $(($unit + $dialout )) "" "" $u_uucp
+	mkdev ctyY$unit c 172 $(($unit + $callunit)) "" "" $u_uucp
+	;;
+
+ttyU*)
+	unit=${i#ttyU}
+	mkdev ttyU$unit c 66 $(($unit + $dialin	 )) "" "" $u_uucp
+	mkdev dtyU$unit c 66 $(($unit + $dialout )) "" "" $u_uucp
+	mkdev ctyU$unit c 66 $(($unit + $callunit)) "" "" $u_uucp
+	;;
+
+ugen*)
+	unit=${i#ugen}
+	for j in 00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15
+	do
+		mkdev ugen$unit.$j c 64 $(($unit * 16 + ${j#0}))
+	done
+	;;
+
+wscons)
+	makedev ttyE0 ttyE1 ttyE2 ttyE3 ttyE4 ttyE5 ttyE6 ttyE7
+	makedev wsmouse0 wsmouse1 wsmouse2 wsmouse3
+	makedev wskbd0 wskbd1 wskbd2 wskbd3
+	makedev wsmux0 wsmux1 wsmux2 wsmux3
+	makedev wsmouse wskbd
+	makedev ttyEcfg ttyEstat
+	makedev wsfont
+	;;
+
+wsmouse)
+	mkdev wsmouse c 65 0
+	;;
+
+wskbd)
+	mkdev wskbd c 65 1
+	;;
+
+wsmux*)
+	unit=${i#wsmux}
+	mkdev wsmux$unit    c 65 $unit
+	mkdev wsmuxctl$unit c 65 $(($unit + 128)) 200
+	;;
+
+xenevt)
+	mkdev xenevt c 141 0
+	;;
+
+xsd_kva)
+	mkdev xsd_kva c 141 1
+	;;
+
+xencons)
+	mkdev xencons c 143 0
+	;;
+
+ttyEstat)
+	mkdev ttyEstat c 47 254
+	;;
+
+ttyEcfg)
+	mkdev ttyEcfg c 47 255
+	;;
+
+ttyE*)
+	unit=${i#ttyE}
+	mkdev ttyE$unit c 47 $unit
+	;;
+
+wsmouse*)
+	unit=${i#wsmouse}
+	mkdev wsmouse$unit c 49 $unit
+	;;
+
+wskbd*)
+	unit=${i#wskbd}
+	mkdev wskbd$unit c 48 $unit
+	;;
+
+fd)
+	if ! $fdesc_mounted; then
+		makedir fd 755
+		n=0
+		while [ $n -lt 64 ]
+		do
+			mkdev fd/$n c 22 $n 666
+			n=$(($n + 1))
+		done
+	fi
+	;;
+
+wt*)
+	case $i in
+	wt*) name=wt;  unit=${i#wt};	chr=10;	blk=3;;
+	esac
+	for sub in $unit $(($unit+8)) $(($unit+16))
+	do
+		mkdev $name$sub		b $blk $(($sub + 0)) 660 $g_operator
+		mkdev n$name$sub	b $blk $(($sub + 4)) 660 $g_operator
+		mkdev r$name$sub	c $chr $(($sub + 0)) 660 $g_operator
+		mkdev nr$name$sub	c $chr $(($sub + 4)) 660 $g_operator
+	done
+	;;
+
+md*)
+	makedisk_minimal md ${i#md} 17 24
+	;;
+
+fss*)
+	case $i in
+	fss*) name=fss; unit=${i#fss};	blk=163;	chr=163
+	esac
+	mkdev $name$unit	b $blk $unit 660 $g_operator
+	mkdev r$name$unit	c $chr $unit 660 $g_operator
+	;;
+
+ss*)
+	case $i in
+	ss*) name=ss;	unit=${i#ss};	chr=19;;
+	esac
+	mkdev $name$unit	c $chr $(($unit * 16 + 0)) 640 $g_operator
+	mkdev n$name$unit	c $chr $(($unit * 16 + 1)) 640 $g_operator
+	mkdev en$name$unit	c $chr $(($unit * 16 + 3)) 640 $g_operator
+	;;
+
+ccd*|cgd*|raid*|vnd*)
+	case $i in
+	ccd*)	name=ccd;	unit=${i#ccd};	blk=16;	chr=18;;
+	cgd*)	name=cgd;	unit=${i#cgd};	blk=21;	chr=93;;
+	raid*)	name=raid;	unit=${i#raid}; blk=18; chr=62;;
+	vnd*)	name=vnd;	unit=${i#vnd};	blk=14;	chr=41;;
+	esac
+	makedisk_p16high $name $unit $blk $chr
+	;;
+
+sd*)
+	name=sd; unit=${i#sd};	blk=4;	chr=13
+	makedisk_p16high $name $unit $blk $chr
+	;;
+
+wd*)
+	name=wd; unit=${i#wd}; blk=0; chr=3
+	makedisk_p16high $name $unit $blk $chr
+	;;
+
+fd*)
+	name=fd; unit=${i#fd}; blk=2; chr=9
+	makedisk_p16high $name $unit $blk $chr
+	;;
+
+ld*)
+	name=ld; unit=${i#ld}; blk=19; chr=69
+	makedisk_p16high $name $unit $blk $chr
+	;;
+
+bio)
+	mkdev bio c 181 0
+	;;
+
+ed*)
+	name=ed; unit=${i#ed}; blk=20; chr=79
+	makedisk_p16high $name $unit $blk $chr
+	;;
+
+xbd*)
+	name=xbd; unit=${i#xbd}; blk=142; chr=142
+	makedisk_p16high $name $unit $blk $chr
+	;;
+
+dk*)
+	name=dk; unit=${i#dk}; blk=168; chr=168
+	minor=0
+	while [ $minor -le ${i#dk} ]
+	do
+		mkdev r$name$minor c $chr $minor 0640 $g_operator
+		mkdev $name$minor b $blk  $minor 0640 $g_operator
+		minor=$(($minor + 1))
+	done
+	;;
+
+ttyCY*)
+	name=tyCY; chr=38; off=32
+	unit=${i#t${name}}
+	minor=$(($unit * $off))
+	eminor=$(($minor + $off))
+	while [ $minor -lt $eminor ]
+	do
+		nminor=000$minor
+		nminor=${nminor#${nminor%???}}
+		mkdev t$name$nminor c $chr $(($minor + $dialin )) "" "" $u_uucp
+		mkdev d$name$nminor c $chr $(($minor + $dialout)) "" "" $u_uucp
+		minor=$(($minor + 1))
+	done
+	;;
+
+ttyCZ*)
+	name=tyCZ; chr=73; off=64
+	unit=${i#t${name}}
+	minor=$(($unit * $off))
+	eminor=$(($minor + $off))
+	while [ $minor -lt $eminor ]
+	do
+		nminor=0000$minor
+		nminor=${nminor#${nminor%????}}
+		mkdev t$name$nminor c $chr $(($minor + $dialin )) "" "" $u_uucp
+		mkdev d$name$nminor c $chr $(($minor + $dialout)) "" "" $u_uucp
+		minor=$(($minor + 1))
+	done
+	;;
+
+
+tty0*|tty1*|tty[0-9])
+	unit=${i#tty}
+	ounit=00$unit
+	ounit=${ounit#${ounit%??}}
+	mkdev tty$ounit c 8 $(($unit + $dialin )) "" "" $u_uucp
+	mkdev dty$ounit c 8 $(($unit + $dialout)) "" "" $u_uucp
+	;;
+
+ttyC*)
+		# some archs call com_chr ttyC traditionally
+	unit=${i#ttyC}; name=ttyC; dname=dtyC; chr=8
+	mkdev  $name$unit c $chr $(($unit + $dialin )) "" "" $u_uucp
+	mkdev $dname$unit c $chr $(($unit + $dialout)) "" "" $u_uucp
+	;;
+
+opty)
+	for j in 0 1 2 3 4 5 6 7 8 9 a b c d e f
+	do
+		case $j in
+		[0-9])	jn=$j ;;
+		a)	jn=10 ;;
+		b)	jn=11 ;;
+		c)	jn=12 ;;
+		d)	jn=13 ;;
+		e)	jn=14 ;;
+		f)	jn=15 ;;
+		esac
+		mkdev ttyp$j c 5 $jn 666
+		mkdev ptyp$j c 6 $jn 666
+	done
+	;;
+
+pty*)
+	class=${i#pty}
+	d1="p q r s t u v w x y z P Q R S T"
+	if [ "$class" -ge 64 ]
+	then
+		warn "$i: pty unit must be between 0 and 63"
+		continue
+	elif [ "$class" -lt 16 ]
+	then
+		offset=0
+		mult=0
+		d2="0 1 2 3 4 5 6 7 8 9 a b c d e f"
+	else
+		class=$(($class - 16))
+		offset=256
+		mult=2
+		d2="g h i j k l m n o p q r s t u v w x y z A B C D E F G H I J K L M N O P Q R S T U V W X Y Z"
+	fi
+	start=$(($class * 16))
+	set -- $d2
+	nt=$#
+	s1=$(($start / $nt))
+	set -- $d1
+	shift $s1
+	t1=$1
+	if [ "$t1" = v ]; then
+		warn "$i: pty unit conflicts with console ttyv0 device"
+		continue
+	fi
+	s2=$(($start % ($nt - $s1 * $mult)))
+	set -- $d2
+	shift $s2
+	t2=$1
+	unit=$(($start + $offset - $s1 * $mult))
+	end=$(($unit + 16))
+	while [ "$unit" -lt "$end" ]
+	do
+		mkdev tty$t1$t2 c 5 $unit 666
+		mkdev pty$t1$t2 c 6 $unit 666
+		shift
+		t2=$1
+		if [ -z "$t2" ]
+		then
+			break
+		fi
+		unit=$(($unit + 1))
+	done
+	;;
+
+st*)
+	case $i in
+	st*) name=st;	unit=${i#st};	chr=14;	blk=5;;
+	esac
+	mkdev $name$unit	b $blk $(($unit * 16 + 0)) 660 $g_operator
+	mkdev n$name$unit	b $blk $(($unit * 16 + 1)) 660 $g_operator
+	mkdev e$name$unit	b $blk $(($unit * 16 + 2)) 660 $g_operator
+	mkdev en$name$unit	b $blk $(($unit * 16 + 3)) 660 $g_operator
+	mkdev r$name$unit	c $chr $(($unit * 16 + 0)) 660 $g_operator
+	mkdev nr$name$unit	c $chr $(($unit * 16 + 1)) 660 $g_operator
+	mkdev er$name$unit	c $chr $(($unit * 16 + 2)) 660 $g_operator
+	mkdev enr$name$unit	c $chr $(($unit * 16 + 3)) 660 $g_operator
+	;;
+
+ses*|ch*|uk*)
+	case $i in
+	ch*)	name=ch;	unit=${i#ch};	chr=17;;
+	uk*)	name=uk;	unit=${i#uk};	chr=20;;
+	ses*)	name=ses;	unit=${i#ses};	chr=74;;
+	esac
+	mkdev $name$unit c $chr $unit 640 $g_operator
+	;;
+
+cd*)
+	makedisk_minimal cd ${i#cd} 6 15
+	;;
+
+mcd*)
+	makedisk_minimal mcd ${i#mcd} 7 39
+	;;
+
+lpt*|lpa*)
+	case $i in
+	lpt*) name=lpt; unit=${i#lpt};	chr=16;	flags=0;;
+	lpa*) name=lpa; unit=${i#lpa};	chr=16;	flags=128;;
+	esac
+	mkdev $name$unit c $chr $(($unit + $flags))
+	mkdev lpt${unit}ctl c $chr $(($unit + 256))
+	;;
+
+bpf)
+	mkdev bpf	c 23 0
+	lndev bpf bpf0
+	;;
+
+bthub)
+	mkdev bthub c 175 0
+	;;
+
+tun*)
+	unit=${i#tun}
+	mkdev tun$unit c 40 $unit
+	;;
+
+joy*)
+	unit=${i#joy}
+	mkdev joy$unit c 26 $unit
+	;;
+
+ipl)
+	mkdev ipl	c 44 0
+	mkdev ipnat	c 44 1
+	mkdev ipstate	c 44 2
+	mkdev ipauth	c 44 3
+	mkdev ipsync	c 44 4
+	mkdev ipscan	c 44 5
+	mkdev iplookup	c 44 6
+	;;
+
+pf)
+	mkdev pf c 161 0
+	;;
+
+crypto)
+	mkdev crypto c 160 0 666
+	;;
+
+cmos)
+	mkdev cmos c 88 0 644
+	;;
+
+speaker)
+	mkdev speaker c 27 0
+	;;
+
+lkm)
+	mkdev lkm c 28 0 640 $g_kmem
+	;;
+
+lockstat)
+	mkdev lockstat c 177 0
+	;;
+
+cpuctl)
+	mkdev cpuctl c 188 0 666
+	;;
+
+audio*)
+	unit=${i#audio}
+	audio=audio$unit
+	sound=sound$unit
+	mixer=mixer$unit
+	audioctl=audioctl$unit
+	: ${unit:-0}
+	mkdev $sound	c 42 $(($unit + 0))	666
+	mkdev $audio	c 42 $(($unit + 128))	666
+	mkdev $mixer	c 42 $(($unit + 16))	666
+	mkdev $audioctl c 42 $(($unit + 192))	666
+	;;
+
+hdaudio*)
+	unit=${i#hdaudio}
+	mkdev hdaudio$unit c 195 $unit 644
+	;;
+
+gpio*)
+	unit=${i#gpio}
+	mkdev gpio$unit c 173 $unit 644
+	;;
+
+rmidi*)
+	unit=${i#rmidi}
+	mkdev rmidi$unit c 58 $unit 666
+	;;
+
+music*)
+	unit=${i#music}
+	: ${unit:-0}
+	mkdev music$unit     c 59 $(($unit + 0))	666
+	mkdev sequencer$unit c 59 $(($unit + 128)) 666
+	;;
+
+radio*)
+	unit=${i#radio}
+	: ${unit:-0}
+	mkdev radio$unit c 87 $unit 666
+	;;
+
+video*)
+	unit=${i#video}
+	: ${unit:-0}
+	mkdev video$unit c 193 $unit 666
+	;;
+
+amr*)
+	unit=${i#amr}
+	mkdev amr$unit c 176 $unit
+	;;
+
+apm)
+	mkdev apm	c 21 0 644
+	mkdev apmctl	c 21 8 644
+	;;
+
+satlink*)
+	unit=${i#satlink}
+	mkdev satlink$unit c 45 $unit 444
+	;;
+
+random)
+	mkdev random	c 46 0 444
+	mkdev urandom	c 46 1 644
+	;;
+
+cfs)
+	makedev cfs0
+	;;
+
+cfs*)
+	unit=${i#cfs}
+	mkdev cfs$unit c 60 $unit
+	;;
+
+sysmon)
+	mkdev sysmon	c 67 0 644
+	mkdev watchdog	c 67 1 644
+	mkdev power	c 67 2 640
+	;;
+
+scsibus*)
+	unit=${i#scsibus}
+	mkdev scsibus$unit c 61 $unit 644
+	;;
+
+bktr)
+	makedev bktr0 bktr1
+	lndev	bktr0	bktr
+	lndev	tuner0	tuner
+	lndev	vbi0	vbi
+	;;
+
+bktr*)
+	unit=${i#bktr}
+	mkdev bktr$unit		c 71 $(($unit + 0))	444
+	mkdev tuner$unit	c 71 $(($unit + 16))	444
+	mkdev vbi$unit		c 71 $(($unit + 32))	444
+	;;
+
+io)
+	mkdev		io	c 2 14	600
+	;;
+
+iop*)
+	unit=${i#iop}
+	mkdev iop$unit c 76 $unit
+	;;
+
+mlx*)
+	unit=${i#mlx}
+	mkdev mlx$unit c 78 $unit
+	;;
+
+mly*)
+	unit=${i#mly}
+	mkdev mly$unit c 80 $unit
+	;;
+
+twa*)
+	unit=${i#twa}
+	mkdev twa$unit c 187 $unit
+	;;
+
+twe*)
+	unit=${i#twe}
+	mkdev twe$unit c 97 $unit
+	;;
+
+icp*)
+	unit=${i#icp}
+	mkdev icp$unit c 102 $unit
+	;;
+
+agp*)
+	unit=${i#agp}
+	mkdev agp$unit c 82 $unit 644
+	if [ "$unit" = "0" ]; then
+		lndev agp$unit agpgart
+	fi
+	;;
+
+pci*)
+	unit=${i#pci}
+	mkdev pci$unit c 83 $unit 644
+	;;
+
+dpti*)
+	unit=${i#dpti}
+	mkdev dpti$unit c 84 $unit
+	;;
+
+dpt*)
+	unit=${i#dpt}
+	mkdev dpt$unit c 96 $unit
+	;;
+
+altq)
+	makedir altq 755
+	unit=0
+	for dev in altq cbq wfq afm fifoq red rio localq hfsc cdnr blue priq
+	do
+		mkdev altq/$dev c 77 $unit 644
+		unit=$(($unit + 1))
+	done
+	;;
+
+isdn)
+	mkdev isdn c 50 0
+	;;
+
+isdnctl)
+	mkdev isdnctl c 51 0
+	;;
+
+isdnbchan*)
+	unit=${i#isdnbchan}
+	mkdev isdnbchan$unit c 52 $unit
+	;;
+
+isdnteld*)
+	unit=${i#isdnteld}
+	mkdev isdnteld$unit c 54 $(($unit + 64))
+	;;
+
+isdntel*)
+	unit=${i#isdntel}
+	mkdev isdntel$unit c 54 $unit
+	;;
+
+isdntrc*)
+	unit=${i#isdntrc}
+	mkdev isdntrc$unit c 53 $unit
+	;;
+
+vmegen)
+	makedev vmegen0 vmegen1 vmegen2 vmegen3
+	;;
+
+vmegen*)
+	unit=${i#vmegen}
+	mkdev vmegen$unit c 68 $(($unit * 16 + 0))
+	;;
+
+wsfont)
+	mkdev wsfont c 81 0
+	;;
+
+cir*)
+	unit=${i#cir}
+	mkdev cir$unit c 86 $unit 666
+	;;
+
+irframe*)
+	unit=${i#irframe}
+	mkdev irframe$unit c 85 $unit
+	;;
+
+pad*)
+	unit=${i#pad}
+	mkdev pad$unit c 189 $unit 444
+	;;
+
+clockctl)
+	mkdev clockctl c 89 0 660 $g_ntpd
+	;;
+
+nsmb)
+	makedev nsmb0 nsmb1 nsmb2 nsmb3
+	;;
+
+nsmb*)
+	unit=${i#nsmb}
+	mkdev nsmb$unit c 98 $unit 644
+	;;
+
+kttcp)
+	mkdev kttcp c 91 0
+	;;
+
+dmoverio)
+	mkdev dmoverio c 92 0 644
+	;;
+
+veriexec)
+	mkdev veriexec c 170 0 600
+	;;
+
+ttyv*)
+	unit=${i#ttyv}
+	mkdev ttyv$unit c 12 $unit
+	;;
+
+# arm, acorn32
+mouse-*)
+	case $i in
+	mouse-pms*) name=pms ;;
+	mouse-qms*) name=qms ;;
+	esac
+	unit=${i#mouse-${name}}
+	lndev $name$unit mouse
+	;;
+
+ipty)
+	mkdev ttyp0 c 5 0 666
+	mkdev ttyp1 c 5 1 666
+	mkdev ptyp0 c 6 0 666
+	mkdev ptyp1 c 6 1 666
+	;;
+
+ptm)
+	makedir pts 755
+	mkdev ptmx c 165 0 666
+	mkdev ptm c 165 1 666
+	;;
+
+spif*)
+	unit=${i#spif}
+	if [ 0$unit -gt 3 ]; then
+		warn "bad unit for $i: $unit"
+		break
+	fi
+	for j in 0 1 2 3 4 5 6 7; do
+		mkdev ttyS$unit$j c 102 $(($unit * 64 + $j)) "" "" $u_uucp
+	done
+	mkdev bppS${unit}0 c 103 $(($unit * 64 + 0))
+	mkdev bppS${unit}1 c 103 $(($unit * 64 + 1))
+	;;
+
+atabus*)
+	unit=${i#atabus}
+	mkdev atabus$unit c 166 $unit 644
+	;;
+
+drvctl)
+	mkdev drvctl c 167 0 644
+	;;
+
+isv)
+	mkdev isv c 192 0 644
+	;;
+
+tap*)
+	unit=${i#tap}
+	case "$unit" in
+	[0-9]*)
+		mkdev tap${unit} c 169 ${unit} 600
+		;;
+	*)
+		mkdev tap c 169 0xfffff 600
+		;;
+	esac
+	;;
+
+fw*)
+	unit=${i#fw}
+	for j in 0 1 2 3
+	do
+		mkdev fw${unit}.${j} c 171 $((${unit} * 256 + ${j})) 660 ${g_operator}
+		mkdev fwmem${unit}.${j} c 171 $((65536 + ${unit} * 256 + ${j})) 660 ${g_operator}
+	done
+	;;
+
+# create putter device and symlinks for all subsystems using it
+putter)
+	mkdev putter c 178 0 600
+	mkdev pud c 178 1 600
+	lndev putter puffs
+	;;
+
+local)
+	if [ -f "$0.local" ]; then
+		umask 0
+		if [ -n "$count_nodes" ]; then
+			count_nodes=$((count_nodes + \
+			    $(linecount "$(sh "$0.local" $opts -s all)") ))
+		else
+			sh "$0.local" $opts all
+		fi
+		umask 077
+	fi
+	;;
+
+*)
+	warn "$i: unknown device"
+	;;
+
+esac
+done
+
+}
+
+
+# three variants of disk partitions - max 8, max 16, max 16 with highpartoffset
+# hack; only the one used by port is retained in final MAKEDEV script
+# routine is called as:
+# makedisk name unit blk chr
+makedisk_p8()
+{
+	name="$1"; unit="$2"; blk="$3"; chr="$4"
+
+	mkdev ${name}${unit}a	b $blk $(($unit * 8 + 0))	640 $g_operator
+	mkdev ${name}${unit}b	b $blk $(($unit * 8 + 1))	640 $g_operator
+	mkdev ${name}${unit}c	b $blk $(($unit * 8 + 2))	640 $g_operator
+	mkdev ${name}${unit}d	b $blk $(($unit * 8 + 3))	640 $g_operator
+	mkdev ${name}${unit}e	b $blk $(($unit * 8 + 4))	640 $g_operator
+	mkdev ${name}${unit}f	b $blk $(($unit * 8 + 5))	640 $g_operator
+	mkdev ${name}${unit}g	b $blk $(($unit * 8 + 6))	640 $g_operator
+	mkdev ${name}${unit}h	b $blk $(($unit * 8 + 7))	640 $g_operator
+	mkdev r${name}${unit}a	c $chr $(($unit * 8 + 0))	640 $g_operator
+	mkdev r${name}${unit}b	c $chr $(($unit * 8 + 1))	640 $g_operator
+	mkdev r${name}${unit}c	c $chr $(($unit * 8 + 2))	640 $g_operator
+	mkdev r${name}${unit}d	c $chr $(($unit * 8 + 3))	640 $g_operator
+	mkdev r${name}${unit}e	c $chr $(($unit * 8 + 4))	640 $g_operator
+	mkdev r${name}${unit}f	c $chr $(($unit * 8 + 5))	640 $g_operator
+	mkdev r${name}${unit}g	c $chr $(($unit * 8 + 6))	640 $g_operator
+	mkdev r${name}${unit}h	c $chr $(($unit * 8 + 7))	640 $g_operator
+}
+
+makedisk_p16()
+{
+	name="$1"; unit="$2"; blk="$3"; chr="$4"
+
+	mkdev ${name}${unit}a	b $blk $(($unit * 16 + 0))	640 $g_operator
+	mkdev ${name}${unit}b	b $blk $(($unit * 16 + 1))	640 $g_operator
+	mkdev ${name}${unit}c	b $blk $(($unit * 16 + 2))	640 $g_operator
+	mkdev ${name}${unit}d	b $blk $(($unit * 16 + 3))	640 $g_operator
+	mkdev ${name}${unit}e	b $blk $(($unit * 16 + 4))	640 $g_operator
+	mkdev ${name}${unit}f	b $blk $(($unit * 16 + 5))	640 $g_operator
+	mkdev ${name}${unit}g	b $blk $(($unit * 16 + 6))	640 $g_operator
+	mkdev ${name}${unit}h	b $blk $(($unit * 16 + 7))	640 $g_operator
+	mkdev ${name}${unit}i	b $blk $(($unit * 16 + 8))	640 $g_operator
+	mkdev ${name}${unit}j	b $blk $(($unit * 16 + 9))	640 $g_operator
+	mkdev ${name}${unit}k	b $blk $(($unit * 16 + 10))	640 $g_operator
+	mkdev ${name}${unit}l	b $blk $(($unit * 16 + 11))	640 $g_operator
+	mkdev ${name}${unit}m	b $blk $(($unit * 16 + 12))	640 $g_operator
+	mkdev ${name}${unit}n	b $blk $(($unit * 16 + 13))	640 $g_operator
+	mkdev ${name}${unit}o	b $blk $(($unit * 16 + 14))	640 $g_operator
+	mkdev ${name}${unit}p	b $blk $(($unit * 16 + 15))	640 $g_operator
+	mkdev r${name}${unit}a	c $chr $(($unit * 16 + 0))	640 $g_operator
+	mkdev r${name}${unit}b	c $chr $(($unit * 16 + 1))	640 $g_operator
+	mkdev r${name}${unit}c	c $chr $(($unit * 16 + 2))	640 $g_operator
+	mkdev r${name}${unit}d	c $chr $(($unit * 16 + 3))	640 $g_operator
+	mkdev r${name}${unit}e	c $chr $(($unit * 16 + 4))	640 $g_operator
+	mkdev r${name}${unit}f	c $chr $(($unit * 16 + 5))	640 $g_operator
+	mkdev r${name}${unit}g	c $chr $(($unit * 16 + 6))	640 $g_operator
+	mkdev r${name}${unit}h	c $chr $(($unit * 16 + 7))	640 $g_operator
+	mkdev r${name}${unit}i	c $chr $(($unit * 16 + 8))	640 $g_operator
+	mkdev r${name}${unit}j	c $chr $(($unit * 16 + 9))	640 $g_operator
+	mkdev r${name}${unit}k	c $chr $(($unit * 16 + 10))	640 $g_operator
+	mkdev r${name}${unit}l	c $chr $(($unit * 16 + 11))	640 $g_operator
+	mkdev r${name}${unit}m	c $chr $(($unit * 16 + 12))	640 $g_operator
+	mkdev r${name}${unit}n	c $chr $(($unit * 16 + 13))	640 $g_operator
+	mkdev r${name}${unit}o	c $chr $(($unit * 16 + 14))	640 $g_operator
+	mkdev r${name}${unit}p	c $chr $(($unit * 16 + 15))	640 $g_operator
+}
+
+makedisk_p16high()
+{
+	ho=524280	# offset for partition 9 to 16
+	name="$1"; unit="$2"; blk="$3"; chr="$4"
+
+	mkdev ${name}${unit}a	b $blk $(($unit * 8 + 0))	640 $g_operator
+	mkdev ${name}${unit}b	b $blk $(($unit * 8 + 1))	640 $g_operator
+	mkdev ${name}${unit}c	b $blk $(($unit * 8 + 2))	640 $g_operator
+	mkdev ${name}${unit}d	b $blk $(($unit * 8 + 3))	640 $g_operator
+	mkdev ${name}${unit}e	b $blk $(($unit * 8 + 4))	640 $g_operator
+	mkdev ${name}${unit}f	b $blk $(($unit * 8 + 5))	640 $g_operator
+	mkdev ${name}${unit}g	b $blk $(($unit * 8 + 6))	640 $g_operator
+	mkdev ${name}${unit}h	b $blk $(($unit * 8 + 7))	640 $g_operator
+	mkdev ${name}${unit}i	b $blk $(($unit * 8 + $ho + 8)) 640 $g_operator
+	mkdev ${name}${unit}j	b $blk $(($unit * 8 + $ho + 9)) 640 $g_operator
+	mkdev ${name}${unit}k	b $blk $(($unit * 8 + $ho + 10)) 640 $g_operator
+	mkdev ${name}${unit}l	b $blk $(($unit * 8 + $ho + 11)) 640 $g_operator
+	mkdev ${name}${unit}m	b $blk $(($unit * 8 + $ho + 12)) 640 $g_operator
+	mkdev ${name}${unit}n	b $blk $(($unit * 8 + $ho + 13)) 640 $g_operator
+	mkdev ${name}${unit}o	b $blk $(($unit * 8 + $ho + 14)) 640 $g_operator
+	mkdev ${name}${unit}p	b $blk $(($unit * 8 + $ho + 15)) 640 $g_operator
+	mkdev r${name}${unit}a	c $chr $(($unit * 8 + 0))	640 $g_operator
+	mkdev r${name}${unit}b	c $chr $(($unit * 8 + 1))	640 $g_operator
+	mkdev r${name}${unit}c	c $chr $(($unit * 8 + 2))	640 $g_operator
+	mkdev r${name}${unit}d	c $chr $(($unit * 8 + 3))	640 $g_operator
+	mkdev r${name}${unit}e	c $chr $(($unit * 8 + 4))	640 $g_operator
+	mkdev r${name}${unit}f	c $chr $(($unit * 8 + 5))	640 $g_operator
+	mkdev r${name}${unit}g	c $chr $(($unit * 8 + 6))	640 $g_operator
+	mkdev r${name}${unit}h	c $chr $(($unit * 8 + 7))	640 $g_operator
+	mkdev r${name}${unit}i	c $chr $(($unit * 8 + $ho + 8)) 640 $g_operator
+	mkdev r${name}${unit}j	c $chr $(($unit * 8 + $ho + 9)) 640 $g_operator
+	mkdev r${name}${unit}k	c $chr $(($unit * 8 + $ho + 10)) 640 $g_operator
+	mkdev r${name}${unit}l	c $chr $(($unit * 8 + $ho + 11)) 640 $g_operator
+	mkdev r${name}${unit}m	c $chr $(($unit * 8 + $ho + 12)) 640 $g_operator
+	mkdev r${name}${unit}n	c $chr $(($unit * 8 + $ho + 13)) 640 $g_operator
+	mkdev r${name}${unit}o	c $chr $(($unit * 8 + $ho + 14)) 640 $g_operator
+	mkdev r${name}${unit}p	c $chr $(($unit * 8 + $ho + 15)) 640 $g_operator
+}
+
+# make only the very few basic disk device nodes - 'a' partition
+# and raw partition
+makedisk_minimal()
+{
+	name=$1; unit=$2; blk=$3; chr=$4
+	doff=8
+	ro=3
+	rn=d
+
+	mkdev ${name}${unit}a	b $blk $(($unit * $doff + 0))	640 $g_operator
+	mkdev ${name}${unit}$rn b $blk $(($unit * $doff + $ro)) 640 $g_operator
+	mkdev r${name}${unit}a	c $chr $(($unit * $doff + 0))	640 $g_operator
+	mkdev r${name}${unit}$rn c $chr $(($unit * $doff + $ro)) 640 $g_operator
+}
+
+# create_mfs_dev nodes
+#	Create a memory file system for a given number of device nodes,
+#	and mount it.  Attempts to use mount_tmpfs, or falls back to
+#	mount_mfs.
+#
+#	If do_redirect, then also redirect output to the console.
+#
+create_mfs_dev()
+{
+	ndevnodes=${1-1200}
+	dev_mountpoint=${PWD:-/dev}
+
+	# Number of inodes is the specified number of device nodes, plus
+	# a margin to allow for extra device nodes created later.
+	ninode=$((ndevnodes * 11 / 10))
+	# Add 2 reserved inodes (needed for both mfs and tmpfs), and round
+	# up to a multiple of 32 (needed for mfs, not needed for tmpfs).
+	ninode=$(( (ninode + 2 + 31) / 32 * 32 ))
+	# Try tmpfs; if that fails try mfs.
+	#
+	# For tmpfs, allocate 16KB and 512 byte per node.
+	# Actual requirements are much lower, but the size limit
+	# is only intended to avoid accidental writing to /dev.
+	fs_bytes=$((16384 + ninode * 512))
+	if mount_tmpfs -s $fs_bytes -n $ninode -m 0755 \
+		-o union tmpfs "$dev_mountpoint"
+	then
+		fstype=tmpfs
+	else
+		# This file system size calculation is exact for mount_mfs(8)
+		# with 512-byte sectors.  40960 bytes (80 blocks) is the
+		# minimum size allowed by mount_mfs.
+		fs_bytes=$((8192 + 2 * 8192 + 4096 + ninode*512 + 8192))
+		[ "$fs_bytes" -lt 40960 ] && fs_bytes=40960
+		fs_blocks=$((fs_bytes/512))
+		if mount_mfs -b 4096 -f 512 -s $fs_blocks -n $ninode -p 0755 \
+		    -o union swap "$dev_mountpoint"
+		then
+			fstype=mfs
+		else
+			die "Failed to create memory file system"
+		fi
+	fi
+
+	# Our current directory was in the lower file system; change it to
+	# the newly mounted upper file system.
+	cd "$dev_mountpoint"
+
+	if $do_redirect; then
+		# Redirect stdout and stderr to console
+		mknod -m 600 -g 0 -u 0 temp_console c 0 0
+		exec >temp_console 2>&1
+		rm temp_console
+	fi
+
+	echo "Created $fstype $dev_mountpoint" \
+		"($fs_bytes byte, $ninode inodes)"
+}
+
+#
+# MAIN: If MAKEDEV_AS_LIBRARY is set, then we are being used as a
+# function library, so just return.  Otherwise, do all the real work.
+#
+[ -n "${MAKEDEV_AS_LIBRARY}" ] && return
+makedev_main makedev ${1+"$@"}

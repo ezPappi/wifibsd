@@ -1,0 +1,18 @@
+cp /usr/obj/sys/arch/i386/compile/WIFIBSD_LIVE_CF/netbsd .
+mv netbsd wifibsd
+makefs -s 16384k -t ffs md.img crap
+mdsetimage -v -s wifibsd md.img
+gzip -f -9 wifibsd
+mv wifibsd.gz wifibsd
+dd if=/dev/zero of=wifibsd-nbsd-cf-0.12.bin bs=1k count=16384
+vnconfig -v -c vnd0 wifibsd-nbsd-cf-0.12.bin
+disklabel -R -r vnd0 disklabel.proto
+newfs -m 0 vnd0a
+/usr/sbin/installboot -v -m i386 -o timeout=3,console=com0 -t ffs /dev/rvnd0a bin/bootxx_ffsv1_install
+mount /dev/vnd0a /mnt
+cp bin/boot /mnt/
+cp wifibsd /mnt/
+umount /mnt
+vnconfig -u vnd0
+scp wifibsd-nbsd-cf-0.12.bin yazzy@192.168.2.201:
+rm wifibsd wifibsd-nbsd-cf-0.12.bin md.img

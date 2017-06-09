@@ -1,0 +1,213 @@
+#!/bin/sh
+
+SHELL=/bin/sh
+PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/libexec
+TERM=wsvt25
+BLOCKSIZE=1k
+export PATH
+export TERM
+export BLOCKSIZE
+PWD_PATH=`pwd`
+
+. /etc/colors.disp
+
+stty status '^T'
+
+# Make sure the user can't kill us by pressing Ctrl-C
+trap : 2
+trap : 3
+trap : 4
+
+prog=${0##*/}
+DSK=wd0
+label=/etc/label
+os_version=wifiBSD
+
+# ====================================================================== #
+#                               My functions :                           #
+# ====================================================================== #
+
+showmsg()
+{
+        echo "${YELLOW}===> $@${NORMAL}"
+}
+
+showerr()
+{
+        echo "${RED}===> $@${NORMAL}"
+}
+
+showquest()
+{
+        echo "${GREEN}===> $@${NORMAL}"
+}
+
+showinfo()
+{
+        echo "${BLUE}===> $@${NORMAL}"
+}
+
+partition_disk(){
+
+showmsg "Wiping out your old MBR."
+	dd if=/dev/zero of=/dev/r${DSK}d bs=8k count=1 2>/dev/null
+
+#
+# Install bootstrapping code.
+#
+	/usr/sbin/installboot -v -m i386 -o timeout=3,console=pc -t ffs /dev/r${DSK}a /bin/bootxx_ffsv1 1>/dev/null 2>&1
+
+echo ""
+showmsg "Partitioning your primary drive..."
+
+#Check the size of our disk from dmesg.boot
+#SZ=`grep ${DSK} /var/run/dmesg.boot | sed -n -e's/.* \([0-9][0-9]*\) sectors$/\1/p'`
+#SZ0=`expr ${SZ}-63` 
+
+eval `fdisk -S ${DSK} 2>/dev/null`
+DLCYL=${DLCYL}
+DLHEAD=${DLHEAD}
+DLSEC=${DLSEC}
+DLSIZE=${DLSIZE}
+BCYL=${BCYL}
+BHEAD=${BHEAD}
+BSEC=${BSEC}
+PART0ID=${PART0ID}
+PART0SIZE=${PART0SIZE}
+PART0START=${PART0START}
+PART0FLAG=${PART0FLAG}
+PART0BCYL=${PART0BCYL}
+PART0BHEAD=${PART0BHEAD}
+PART0BSEC=${PART0BSEC}
+PART0ECYL=${PART0ECYL}
+PART0EHEAD=${PART0EHEAD}
+PART0ESEC=${PART0ESEC}
+PART1SIZE=${PART1SIZE}
+PART2SIZE=${PART2SIZE}
+PART3SIZE=${PART3SIZE}
+
+PART0START=${BSEC}
+P0SIZE=$((${DLSIZE}-${PART0START}))
+PART0ID=169
+
+#
+# Create disk label /etc/label
+#
+(			
+echo "# /dev/r${DSK}d:";				
+echo "type: unknown"; 			
+echo "disk: wifibsd";			
+echo "label: fictitious"; 		
+echo "flags:"; 				
+echo "bytes/sector: 512"; 		
+echo "sectors/track: ${BSEC}"; 		
+echo "tracks/cylinder: ${DLHEAD}";	
+echo "sectors/cylinder: 1008"; 		
+echo "cylinders: ${DLCYL}"; 
+echo "total sectors: ${DLSIZE}"; 
+echo "rpm: 3600"; 
+echo "interleave: 1"; 
+echo "trackskew: 0"; 
+echo "cylinderskew: 0"; 
+echo "headswitch: 0           # microseconds"; 
+echo "track-to-track seek: 0  # microseconds"; 
+echo "drivedata: 0"; 
+echo ""; 
+echo "4 partitions:"; 
+echo "#        size    offset     fstype [fsize bsize cpg/sgs]"; 
+echo " a:  ${P0SIZE}        ${BSEC}     4.2BSD      0     0     0  # (Cyl.      0 -     25*)"; 
+echo " d:  ${DLSIZE}         0     unused      0     0        # (Cyl.      0 -     25*)"; 
+echo "";
+) >> ${label}
+
+#
+#  Label the disk
+#
+#Add progress bar here?
+	disklabel -R -r ${DSK} ${label} 1>/dev/null 2>&1
+
+#        
+#  Create new file system 
+#
+	newfs -m 0 /dev/${DSK}a 1>/dev/null 2>&1
+	
+#
+# Run fsck on created filesystem and mount it
+#
+	mount_ffs /dev/${DSK}a /mnt 1>/dev/null 2>&1 || \
+	fsck_ffs -y /dev/${DSK}a 1>/dev/null 2>&1 && mount_ffs /dev/${DSK}a /mnt 1>/dev/null 2>&1 || \
+	fsck_ffs -f -y /dev/${DSK}a 1>/dev/null 2>&1 
+
+# Clear the screen
+tput cl
+	showinfo "Successfully finished partitioning your drive."
+#else
+#        showerr "There was a problem installing boot sector on your drive !"
+#fi
+
+copy_system
+}
+
+copy_system(){
+	echo ""
+	showmsg "Installing wifiBSD to the installation disk..."
+	showmsg "Please hold on ..."
+	echo ""
+if [ -d /tmp/site ]; then
+	#for x in /cdrom/*.wpkg ; do
+	#progress -l 120g -zf site.tar.gz tar xpf -
+	#tar -zxpf $x -C /tmp
+	cd /tmp/site && find . | cpio -vupdm /mnt 1>/dev/null 2>&1
+	#done
+
+if [ "$?" = "0" ]; then
+	showinfo "wifiBSD was successfully installed to your disk."
+        showmsg "Rebooting system to reinitialize wifibsd..."
+	showmsg "Please hold on ..."
+	echo ""
+        /sbin/reboot > /dev/null 2>&1
+fi
+else
+	echo ""
+        showerr "wifiBSD system file is MISSING!"
+	showerr "The system could not be copied to your drive."
+	echo ""
+fi
+
+}
+
+checkyesno(){
+	showquest "You primary disk will be entirely erased." 
+	showquest "Are you sure you want to"
+	showquest "install wifiBSD on your drive? [Y/N]:"
+        read -p "`showmsg Enter your choice:` " install_choice
+	echo ""
+
+        case ${install_choice} in
+
+[Yy]|[Yy][Ee][Ss])
+	partition_disk
+        return 0
+        ;;
+
+[Nn]|[Nn][Oo])
+	showmsg "You chose not to install ${os_version}"
+	showmsg "Your system will reboot now ..."
+        /sbin/reboot > /dev/null 2>&1
+        return 1
+        ;;
+
+*)
+        showinfo "Your choice - '${install_choice}' is illegal"
+        showinfo "Please chose either Y (yes) or N (no)"
+        echo ""
+        checkyesno
+        return 1
+        ;;
+	
+esac
+}
+
+	clear
+	echo ""
+checkyesno

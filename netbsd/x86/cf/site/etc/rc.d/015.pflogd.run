@@ -1,0 +1,21 @@
+#!/bin/sh
+
+name="pflogd"
+command="/sbin/${name}"
+log_file="/var/log/pflog"
+
+pflogd_check()
+{
+	(
+	umask 022
+	if [ -x ${command} ]; then
+		${command} -f ${log_file}
+	else
+		echo "pflogd binary is unavaliable!"
+		echo "The ${name} did not start."
+	fi
+	)
+}
+
+echo "Starting pflogd..."
+pflogd_check

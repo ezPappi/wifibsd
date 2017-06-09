@@ -1,0 +1,65 @@
+#!/bin/sh
+
+# Startup ssh
+
+. /etc/rc.common
+
+SSH=ssh
+PIDFILE=/var/run/${SSH}d.pid
+conf_dir="/etc/${SSH}"
+ssh_keygen_flags=""
+command="/usr/sbin/${SSH}d"
+ConsoleMessage=echo
+
+StartService ()
+{
+	if [ -r $PIDFILE ]; then
+		$ConsoleMessage "SSH already running"
+	else
+
+        	if [ ! -f ${conf_dir}/ssh_host_key ]; then
+                	echo "Generating SSH version 1 RSA host key..."
+                	/usr/bin/ssh-keygen -t rsa1 ${ssh_keygen_flags} \
+			-f ${conf_dir}/ssh_host_key -N '' 1>/dev/null 2>&1
+        	fi
+
+		if [ ! -f ${conf_dir}/ssh_host_dsa_key ]; then
+			echo "Generating SSH DSA host key..."
+                	/usr/bin/ssh-keygen -t dsa ${ssh_keygen_flags} \
+			-f ${conf_dir}/ssh_host_dsa_key -N '' 1>/dev/null 2>&1
+		fi
+
+		if [ -f ${conf_dir}/ssh_host_rsa_key ]; then
+                	echo "Generating SSH version 2 RSA key ..."
+                	/usr/bin/ssh-keygen -t rsa ${ssh_keygen_flags} \
+                	-f ${conf_dir}/ssh_host_rsa_key -N '' 1>/dev/null 2>&1
+		fi
+
+		$ConsoleMessage "Starting SSH"
+		${SSH}d
+	fi
+}
+
+StopService ()
+{
+	if [ -r $PIDFILE ]; then
+		$ConsoleMessage "Stopping SSH"
+		kill -TERM `cat $PIDFILE`
+	else
+		$ConsoleMessage "SSH not running"
+	fi
+}
+
+RestartService ()
+{
+	if [ -r $PIDFILE ]; then
+		$ConsoleMessage "Restarting SSH"
+		kill -HUP `cat $PIDFILE`
+	else
+		$ConsoleMessage "SSH not running.  Starting"
+		StartService
+	fi
+}
+
+RunService "$1"
+

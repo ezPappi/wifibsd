@@ -1,0 +1,111 @@
+#!/bin/sh
+
+# /etc/rc - master bootup script, invokes php setup
+# part of pfSense by Scott Ullrich
+# Copyright (C) 2004 Scott Ullrich, All rights reserved.
+# originally based on m0n0wall (http://neon1.net/m0n0wall)
+# Copyright (C) 2003-2004 Manuel Kasper <mk@neon1.net>.
+# All rights reserved.
+
+stty status '^T'
+
+trap : 2
+trap : 3
+
+HOME=/
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+export HOME PATH
+
+version=`cat /etc/version`
+
+echo
+echo "Welcome to pfSense ${version} ..."
+echo
+
+/sbin/mount -a || fsck -y && mount -a
+SWAPDEVICE=`cat /etc/fstab | grep swap | cut -f1`
+/sbin/dumpon -v $SWAPDEVICE 2>/dev/null
+/sbin/swapon -a 2>/dev/null
+/bin/mkdir -p /usr/savecore 2>/dev/null
+/sbin/savecore /usr/savecore $SWAPDEVICE
+
+/usr/local/bin/php -f /etc/rc.conf_mount_rw
+
+rm -rf /var/run/*
+rm -rf /tmp/*
+
+set -T
+trap "echo 'Reboot interrupted'; exit 1" 3
+
+# Create uploadbar tmp directory
+mkdir /tmp/uploadbar
+chmod 777 /tmp/uploadbar
+
+# make some directories in /var
+mkdir /var/run /var/log /var/etc /var/db/ipf 2>/dev/null
+chmod 0755 /var/db/ipf
+rm -rf /var/log/*
+
+# generate circular logfiles
+clog -i -s 262144 /var/log/system.log
+clog -i -s 262144 /var/log/filter.log
+clog -i -s 32768 /var/log/dhcpd.log
+clog -i -s 32768 /var/log/vpn.log
+clog -i -s 32768 /var/log/portalauth.log
+chmod 0600 /var/log/system.log /var/log/filter.log /var/log/dhcpd.log /var/log/vpn.log /var/log/portalauth.log
+
+adjkerntz -i
+
+sysctl net.inet.tcp.sack.enable=0
+
+mount_devfs devfs /dev
+
+echo Syncing master.passwd...
+/usr/sbin/pwd_mkdb -d /etc/ /etc/master.passwd
+
+# Create an initial utmp file
+cd /var/run && cp /dev/null utmp && chmod 644 utmp
+
+# Build devices database
+#dev_mkdb
+
+# Run ldconfig
+/sbin/ldconfig -elf /usr/lib /usr/local/lib /lib
+
+# let the PHP-based configuration subsystem set up the system now
+/etc/rc.bootup
+
+/usr/local/bin/php -f /etc/rc.conf_mount_rw
+
+echo -n Starting Secure Shell Services...
+/etc/sshd
+
+echo -n "Starting USB..."
+/usr/sbin/usbd 2>>/tmp/bootup_messages
+echo Done.
+
+/usr/sbin/cron 2>>/tmp/bootup_messages
+
+echo -n "Syncing package configurations..."
+/etc/rc.packages
+echo Done.
+
+echo "Executing rc.d items..."
+for FILE in /usr/local/etc/rc.d/*.sh; do
+    if [ -e $FILE ]; then
+        echo -n " Starting ${FILE}..."
+        sh $FILE >>/tmp/bootup_messages 2>&1
+	echo "Done."
+    fi
+done
+
+# one more pass to give package plugins a chance to adjust
+echo -n "Final firewall setup in progress..."
+/etc/rc.filter_configure
+echo "Done."
+
+/usr/local/bin/php -f /etc/rc.conf_mount_ro
+
+echo "Bootup complete"
+
+exit 0

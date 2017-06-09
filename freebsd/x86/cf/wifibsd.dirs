@@ -1,0 +1,39 @@
+#
+# wifibsd.dirs
+# a list of directories to make.
+#
+# for freebsd 5.2+
+#
+
+bin
+boot/defaults
+boot/kernel
+cdrom
+cf
+dev
+etc/defaults
+etc/fw
+etc/mtree
+etc/namedb
+etc/ppp
+etc/ssh
+etc/ssl
+etc/pam.d
+etc/rc.d
+lib
+libexec
+mnt
+proc
+root
+sbin
+usr/bin
+usr/sbin
+usr/lib/aout
+usr/libexec
+usr/local
+usr/share/misc
+var/empty
+var/run
+var/tmp:tmp
+var/db
+var/spool

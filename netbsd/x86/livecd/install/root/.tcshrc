@@ -1,0 +1,65 @@
+if ($?tcsh ) then
+  bindkey "\e[1~" beginning-of-line  # Home
+  bindkey "\e[7~" beginning-of-line  # Home rxvt
+  bindkey "\e[2~" overwrite-mode     # Ins
+  bindkey "\e[3~" delete-char        # Delete
+  bindkey "\e[4~" end-of-line        # End
+  bindkey "\e[8~" end-of-line        # End rxvt
+
+# A righteous umask
+umask 22
+
+set path = (/sbin /bin /usr/sbin /usr/bin /usr/local/sbin /usr/local/bin $HOME/bin  /usr/pkg/bin  /usr/pkg/sbin)
+
+setenv  EDITOR vi
+setenv  BLOCKSIZE       K
+setenv  TERM wsvt25
+set  CVS_RSH=ssh
+
+if ( -x /usr/bin/less ) then
+        setenv PAGER "less -i -x4"
+else
+        setenv PAGER more
+endif
+if ( $TERM == "ansi" || $TERM == "linux" ) then
+         setenv TERM wsvt25
+endif
+if ($?prompt) then
+        mesg y
+        umask 022
+        stty status ^T 
+if (${uid} == 0) then
+set prompt = "%{\033[31m%}[%{\033[0m%}%n%{\033[31m%}@%{\033[0m%}%m%{\033[31m%}:%{\033[0m%}%B%~%b%{\033[31m%}]%{\033[0m%}%B%#%b "
+complete cd 'p/1/d/'
+else
+set prompt = "%{\033[33m%}[%{\033[0m%}%n%{\033[33m%}@%{\033[0m%}%m%{\033[33m%}:%{\033[0m%}%B%~%b%{\033[33m%}]%{\033[0m%}%B%#%b "
+endif
+
+        set autocorrect
+        set autoexpand
+        set autolist = ambiguous
+        set autologout = 0
+        set cdpath = (~)
+        set complete
+        set correct = cmd
+        set fignore = (.o .bak .old)
+        set filec
+        set histdup = prev
+        set implicitcd = verbose
+        set listjobs = long
+        set notify
+        set savehist = 2500
+#        set watch = (1 any any)
+        set who = "%n has %a %l from %M."
+
+# Custom aliases:
+	alias l         "less -i"
+        alias grep      "grep -a"
+        alias ffind     "find / -name '\!*' -ls"
+        alias watchlog  "tail -500 -f /var/log/messages"
+	#alias dmesg	"cat /kern/msgbuf"
+        alias cd..      "cd .."
+        if (-e ~/.cshrc.local) then
+                source ~/.cshrc.local
+        endif
+endif

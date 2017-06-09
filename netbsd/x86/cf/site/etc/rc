@@ -1,0 +1,198 @@
+#!/bin/sh
+#
+
+stty status '^T'
+
+trap : 2
+trap : 3
+
+HOME=/root
+PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/libexec
+TERM=wsvt25
+BLOCKSIZE=1k
+EDITOR=vi
+PAGER=less
+export PATH 
+export TERM 
+export BLOCKSIZE 
+export EDITOR 
+export PAGER 
+export HOME
+
+PS1="`hostname `# "
+version=`cat /etc/wifibsd-version`
+hostname=`cat /etc/hostname`
+
+umask 022
+
+
+boot_start()
+		{
+
+		# Mount the disks reading the fstab info.
+		# Run fsck if the fs is dirty or/and cannot mount.
+		fsck -qy 1>/dev/null 2>&1 && mount -a || fsck -y 1>/dev/null 2>&1 && mount -a || fsck -f -y
+		}
+
+
+disk_check()
+		{
+	        # Check if /disk exists and create dirs if not already there.
+		if [ -d /disk ]; then
+#	                if [ ! -d /disk/conf ]; then
+#				mkdir -p /disk/conf/etc/ssh
+#			fi
+			if [ ! -d /disk/ftp ]; then
+				mkdir /disk/ftp
+	                fi
+			if [ ! -d /disk/backup ]; then
+				mkdir -p /disk/backup/log 
+				mkdir /disk/backup/root
+				mkdir /disk/backup/etc
+	                fi
+		fi
+
+#
+# /var is mounted in memory so it's empty at boot
+#
+if [ -d /var ]; then
+
+	for x in "/var/db" "/var/run" "/var/tmp/vi.recover" "/var/log/wtmp" \
+		"/var/chroot/sshd" "/var/chroot/pflogd" "/var/cron/tabs" "/var/spool/lock"
+	do
+        	if [ ! -d $x ]; then
+                	mkdir -p $x
+        	fi
+	done
+
+# /tmp symlinked to /var/tmp needs to be writeable by processes like web server
+	chmod 777 /var/tmp
+
+	for y in "/var/db/dhcpd.leases" "/var/log/all" "/var/log/authlog" \
+         	"/var/log/lastlog" "/var/log/messages" "/var/run/utmp" \
+		"/var/log/dnsmasq.log" "/var/log/sshd.log" "/var/log/firewall.log" \
+         	"/var/run/syslogd.sockets" "/var/run/pflogd.pid" "/var/run/dhclient.pid" \
+         	"/var/run/utmpx" "/var/run/utmp"
+	do
+        	if [ ! -f $y ]; then
+        	        touch $y
+        	fi
+	done
+
+fi
+		}
+
+restore_backup()
+		{
+	        # Restore admin's history file
+			if [ -f /disk/backup/root/.history ]; then
+				mv /disk/backup/root/.history /root/ 
+			fi
+
+			if [ -f /disk/backup/root/authorized_keys2 ]; then
+				mv /disk/backup/root/authorized_keys2 /root/.ssh/
+			fi
+
+			if [ -f /disk/backup/root/id_dsa ]; then
+				mv /disk/backup/root/id_dsa /root/.ssh/
+			fi
+
+			if [ -f /disk/backup/root/known_hosts ]; then
+				mv /disk/backup/root/known_hosts /root/.ssh/
+			fi
+
+			if [ -f /disk/backup/root/crontab ]; then
+				mv /disk/backup/root/crontab /var/cron/tabs/root
+			fi
+
+#		if [ -d /disk/backup/etc ] ; then
+#			if [ -f /disk/backup/etc/passwd ] ; then
+#				cp /disk/backup/etc/passwd	/etc/
+#			fi
+#			if [ -f /disk/backup/etc/master.passwd ] ; then
+#				cp /disk/backup/etc/master.passwd /etc/
+#			fi
+#			if [ -f /disk/backup/etc/pwd.db ] ; then
+#				cp /disk/backup/etc/pwd.db /etc/
+#			fi
+#			if [ -f /disk/backup/etc/spwd.db ] ; then
+#				cp /disk/backup/etc/spwd.db /etc/
+#			fi
+#		fi 
+
+		}
+
+#mv_files()
+#		{
+#		for ssh in /etc/ssh*; do
+#			if [ -f $ssh ]; then
+#		mv -f $ssh /disk/conf/etc/ssh/
+#			fi
+#		done
+
+
+# Bad code. Created symlink hell.
+#ls /disk/conf/etc/passwd /disk/conf/etc/master.passwd /disk/conf/etc/pwd.db /disk/conf/etc/spwd.db 1>/dev/null 2>&1
+#	 if [ $? -gt 0 ] ; then
+#		cd /etc ; mv passwd master.passwd pwd.db spwd.db /disk/conf/etc/ 
+#			ln -s /disk/conf/etc/passwd 		/etc/passwd	
+#			ln -s /disk/conf/etc/master.passwd	/etc/master.passwd
+#			ln -s /disk/conf/etc/pwd.db		/etc/pwd.db
+#			ln -s /disk/conf/etc/spwd.db		/etc/spwd.db
+#	else
+#		cd /etc ; rm -f passwd master.passwd pwd.db spwd.db  
+#                       ln -s /disk/conf/etc/passwd             /etc/passwd
+#                       ln -s /disk/conf/etc/master.passwd      /etc/master.passwd
+#                       ln -s /disk/conf/etc/pwd.db             /etc/pwd.db
+#                       ln -s /disk/conf/etc/spwd.db            /etc/spwd.db
+#		fi
+#		}
+
+pass_start()
+		{
+		echo "Syncing master.passwd ..."
+        	/usr/sbin/pwd_mkdb /etc/master.passwd
+		}
+
+net_conf() 
+		{
+
+        	# Configure network.
+	        ifconfig lo0 127.0.0.1		
+	        hostname ${hostname}
+		#dhclient -q sip0
+	        #ifconfig sip1 inet 192.168.1.1 netmask 255.255.255.0
+		#ifconfig ${WLAN_NIC} inet 192.168.150.2 netmask 255.255.255.0 nwid ${MY_SSID} mode 11g
+		}
+
+locals_start() {
+		/bin/sh /etc/rc.start
+		}
+		
+		
+services_start()
+		{
+		# Start network services. Disabled service will be called .stop
+		for i in /etc/rc.d/*.run; do
+		    if [ -f $i ]; then
+		        $i
+		    fi
+		done
+		}
+
+start_system()
+		{
+		boot_start
+		disk_check
+		restore_backup
+		locals_start
+		services_start
+		pass_start
+#		mv_files
+		net_conf
+#		wsconsctl -kw encoding=no
+		}
+
+
+start_system
+

@@ -1,0 +1,5 @@
+/bin/sh
+/bin/csh
+/bin/tcsh
+/etc/rc.start
+/usr/local/bin/vtysh

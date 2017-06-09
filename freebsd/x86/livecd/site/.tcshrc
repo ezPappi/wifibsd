@@ -1,0 +1,66 @@
+if ($?tcsh ) then
+	bindkey "\e[1~" beginning-of-line	# Home
+	bindkey "\e[7~" beginning-of-line	# Home	rxvt
+	bindkey "\e[2~" overwrite-mode		# Ins
+	bindkey "\e[3~" delete-char			# Delete
+	bindkey "\e[4~" end-of-line			# End
+	bindkey "\e[8~" end-of-line			# End rxvt
+endif
+
+# A	righteous umask
+umask 22
+
+set	path = (/sbin /bin /usr/sbin /usr/bin /usr/games /usr/local/sbin /usr/local/bin	$HOME/bin)
+
+setenv	EDITOR		vi
+setenv	BLOCKSIZE	K
+setenv	PAGER		more
+setenv	TERM		xterm-color
+
+
+if ($?prompt) then
+	mesg y
+	umask 022
+
+	if (${uid} == 0) then
+		set	prompt = "%{\033[31m%}[%{\033[0m%}%n%{\033[31m%}@%{\033[0m%}%m%{\033[31m%}:%{\033[0m%}%B%~%b%{\033[31m%}]%{\033[0m%}%B%#%b "
+		complete cd	'p/1/d/'
+	else
+		set	prompt = "%{\033[33m%}[%{\033[0m%}%n%{\033[33m%}@%{\033[0m%}%m%{\033[33m%}:%{\033[0m%}%B%~%b%{\033[33m%}]%{\033[0m%}%B%#%b "
+	endif
+
+	set	autocorrect
+	set	autoexpand
+	set	autolist = ambiguous
+	set	autologout = 0
+	set	cdpath = (~)
+	set	complete
+	set	correct	= cmd
+	set	fignore	= (.o .bak .old)
+	set	filec
+	set	histdup	= prev
+	set	ignoreeof =	1
+	set	implicitcd = verbose
+	set	listjobs = long
+	set	mail = (60 /var/mail/$USER)
+	set	notify
+	set	savehist = 2500
+	set	watch =	(1 any any)
+	set	who	= "%n has %a %l	from %M."
+	alias m			"more -i"
+	alias l			"less -i"
+	alias h			history
+	alias j			"jobs -l"
+	alias ls		"/bin/ls -G"
+	alias la		"/bin/ls -Ga"
+	alias lf		"/bin/ls -GFAh"
+	alias ll		"/bin/ls -GhAlioBF"
+	alias llm		"/bin/ls -GAlF"
+	alias lsflags	"/bin/ls -Glo \!*"
+	alias cd..		"cd	.."
+
+	if (-e ~/.cshrc.local) then
+			source ~/.cshrc.local
+	endif
+
+endif

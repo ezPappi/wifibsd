@@ -1,0 +1,12 @@
+create
+# Mark the physical interface used by this PPPoE interface up
+! /sbin/ifconfig ne0 up
+# Let $int use ne0 as its Ethernet interface
+! /sbin/pppoectl -e ne0 $int
+# Configure authentication
+! /sbin/pppoectl $int idle-timeout=0 myauthproto=pap 'myauthname=XXX' 'myauthsecret=YYY' hisauthproto=none
+# Configure the PPPoE interface itself. These addresses are magic
+# meaning we don't care about either address and let the remote
+# ppp choose them.
+0.0.0.0 0.0.0.1 link1 up
+! /sbin/route add default -iface 0.0.0.1

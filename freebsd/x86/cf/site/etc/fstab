@@ -1,0 +1,7 @@
+# device                # mount         # type          # options       # dump  # fsck
+/dev/md0                /               ufs             ro              0       0
+/dev/ad0a               /cf             ufs             rw,noauto       0       0
+/dev/acd0               /cdrom          cd9660          ro,noauto       0       0
+proc                    /proc           procfs          rw              0       0
+#md                     /tmp            mfs             rw,-s3m         0       0
+#md                     /var            mfs             rw,-s7m         0       0
