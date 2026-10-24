@@ -1,0 +1,20 @@
+#!/bin/sh
+#
+# netcli web service. Enable with netclid=YES in /etc/rc.conf and turn the
+# service on in the configuration ("ip http secure-server").
+#
+# PROVIDE: netclid
+# REQUIRE: netcli DAEMON
+# KEYWORD: shutdown
+
+$_rc_subr_loaded . /etc/rc.subr
+
+name="netclid"
+rcvar=$name
+command="/usr/local/sbin/netcli"
+pidfile="/var/run/${name}.pid"
+command_args="${netcli_flags} serve -syslog -pidfile ${pidfile} &"
+procname="${command}"
+
+load_rc_config $name
+run_rc_command "$1"

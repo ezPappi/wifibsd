@@ -1,0 +1,92 @@
+# Example: home router. wm0 = WAN (DHCP), wm1 + ath0 bridged as the LAN.
+# Add a web user with the CLI: username admin secret <password>
+# netcli configuration
+hostname: gw
+domain-name: home.lan
+name-servers:
+  - 1.1.1.1
+  - 9.9.9.9
+ip-routing: true
+interfaces:
+  ath0:
+    description: LAN wifi
+    wireless:
+      mode: hostap
+      ssid: HomeNet
+      security: wpa2-psk
+      psk: change-this-passphrase
+      channel: 6
+      country: "NO"
+  bridge0:
+    description: LAN
+    ipv4:
+      - 192.168.1.1/24
+    bridge:
+      members:
+        - wm1
+        - ath0
+  wm0:
+    description: WAN
+    dhcp: true
+    access-group-in: WAN-IN
+  wm1:
+    description: LAN switch port
+access-lists:
+  WAN-IN:
+    entries:
+      - seq: 10
+        action: permit
+        protocol: icmp
+        source: any
+        destination: any
+        icmp-type: 8
+      - seq: 20
+        action: permit
+        protocol: icmp
+        source: any
+        destination: any
+        icmp-type: 3
+      - seq: 30
+        action: permit
+        protocol: icmp
+        source: any
+        destination: any
+        icmp-type: 11
+      - seq: 40
+        action: permit
+        protocol: tcp
+        source: any
+        destination: 192.168.1.10/32
+        destination-port: "443"
+      - seq: 50
+        action: deny
+        protocol: ip
+        source: any
+        destination: any
+        log: true
+nat:
+  - type: overload
+    interface: wm0
+    source: 192.168.1.0/24
+  - type: static
+    interface: wm0
+    protocol: tcp
+    local-address: 192.168.1.10
+    local-port: 443
+    public-port: 443
+dhcp-pools:
+  LAN:
+    network: 192.168.1.0/24
+    range-start: 192.168.1.100
+    range-end: 192.168.1.199
+    default-router:
+      - 192.168.1.1
+    dns-servers:
+      - 1.1.1.1
+      - 9.9.9.9
+    domain-name: home.lan
+    lease-seconds: 86400
+web:
+  enabled: true
+  tls: true
+  bind: 192.168.1.1

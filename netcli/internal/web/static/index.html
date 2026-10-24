@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>netcli</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232a78d6'/%3E%3Cpath d='M8 22V10l8 8V10m8 12V10' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+</head>
+<body>
+<div id="login" class="login" hidden>
+  <form id="login-form" class="login-card">
+    <div class="brand"><span class="logo">N</span> netcli</div>
+    <label>User name <input id="login-user" autocomplete="username" required></label>
+    <label>Password <input id="login-pass" type="password" autocomplete="current-password" required></label>
+    <button type="submit" class="primary">Log in</button>
+    <p id="login-error" class="error" role="alert"></p>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <header class="topbar">
+    <div class="brand"><span class="logo">N</span> <span id="hostname">router</span></div>
+    <div class="badges">
+      <span id="badge-dry" class="badge warn" hidden title="System commands are logged, not executed">dry run</span>
+      <span id="badge-revert" class="badge warn" hidden></span>
+      <span id="badge-unsaved" class="badge" hidden>unsaved changes</span>
+      <button id="btn-save" class="small" hidden>Save to startup</button>
+    </div>
+    <div class="spacer"></div>
+    <span id="platform" class="muted"></span>
+    <button id="btn-logout" class="small ghost">Log out</button>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="dashboard" aria-selected="true">Dashboard</button>
+    <button role="tab" data-tab="interfaces">Interfaces</button>
+    <button role="tab" data-tab="config">Configuration</button>
+    <button role="tab" data-tab="terminal">Terminal</button>
+  </nav>
+
+  <main>
+    <section id="tab-dashboard" class="tab">
+      <div class="tiles">
+        <div class="tile"><div class="tile-label">CPU</div><div class="tile-value" id="tile-cpu">–</div></div>
+        <div class="tile"><div class="tile-label">Memory</div><div class="tile-value" id="tile-mem">–</div></div>
+        <div class="tile"><div class="tile-label">Total in</div><div class="tile-value" id="tile-in">–</div></div>
+        <div class="tile"><div class="tile-label">Total out</div><div class="tile-value" id="tile-out">–</div></div>
+        <div class="tile"><div class="tile-label">Interfaces up</div><div class="tile-value" id="tile-ifs">–</div></div>
+      </div>
+      <div class="controls">
+        <div class="seg" role="group" aria-label="Unit">
+          <button data-unit="bps" aria-pressed="true">Bits/s</button>
+          <button data-unit="pps" aria-pressed="false">Packets/s</button>
+        </div>
+        <label class="check"><input type="checkbox" id="show-idle"> Show idle interfaces</label>
+        <span class="muted" id="stream-state">connecting…</span>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>CPU and memory</h2><div class="legend" id="legend-sys"></div></div>
+        <div class="chart" id="chart-sys"></div>
+      </div>
+      <div class="grid" id="if-charts"></div>
+    </section>
+
+    <section id="tab-interfaces" class="tab" hidden>
+      <div class="card">
+        <table class="table" id="if-table">
+          <thead><tr><th>Interface</th><th>Status</th><th>Description</th><th>Addresses</th><th>MAC / MTU</th><th class="num">In</th><th class="num">Out</th><th>Filters / wireless</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="tab-config" class="tab" hidden>
+      <div class="controls">
+        <div class="seg" role="group" aria-label="View">
+          <button data-view="cli" aria-pressed="true">Running (CLI)</button>
+          <button data-view="yaml" aria-pressed="false">Edit YAML</button>
+          <button data-view="diff" aria-pressed="false">Startup vs running</button>
+        </div>
+      </div>
+      <div class="card" id="view-cli"><pre id="cfg-cli" class="code"></pre></div>
+      <div class="card" id="view-yaml" hidden>
+        <textarea id="cfg-yaml" class="code" spellcheck="false" aria-label="Running configuration in YAML"></textarea>
+        <div class="actions">
+          <button id="btn-validate">Validate &amp; preview</button>
+          <button id="btn-apply" class="primary">Apply</button>
+          <button id="btn-reload" class="ghost">Discard edits</button>
+        </div>
+        <pre id="cfg-result" class="code result" hidden></pre>
+      </div>
+      <div class="card" id="view-diff" hidden><pre id="cfg-diff" class="code"></pre></div>
+    </section>
+
+    <section id="tab-terminal" class="tab" hidden>
+      <div class="card term">
+        <pre id="term-out" class="code" aria-live="polite"></pre>
+        <div class="term-input">
+          <span id="term-prompt"></span>
+          <input id="term-line" autocomplete="off" spellcheck="false" aria-label="Command">
+        </div>
+      </div>
+      <p class="muted">Same commands as the console: <kbd>?</kbd> for help, <kbd>Tab</kbd> to complete, <kbd>↑</kbd>/<kbd>↓</kbd> for history.</p>
+    </section>
+  </main>
+  <div id="tooltip" class="tooltip" hidden></div>
+  <div id="toast" class="toast" hidden></div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
