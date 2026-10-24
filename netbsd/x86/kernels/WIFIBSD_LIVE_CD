@@ -16,7 +16,7 @@ include 	"arch/i386/conf/std.i386"
 options 	MEMORY_DISK_HOOKS
 options 	MEMORY_DISK_IS_ROOT	# force root on memory disk
 options 	MEMORY_DISK_SERVER=0	# no userspace memory disk support
-options 	MEMORY_RBFLAGS=0	# don't force single user
+options 	MEMORY_DISK_RBFLAGS=0	# don't force single user
 
 # Size of memory disk, in blocks:
 #options 	MEMORY_DISK_ROOT_SIZE=2880	# 1.44M - 1*1024*2 (same as a floppy)
@@ -25,12 +25,6 @@ options 	MEMORY_RBFLAGS=0	# don't force single user
 options 	MEMORY_DISK_ROOT_SIZE=40960	# 20M - 16*1024*2
 
 maxusers	32		# estimated number of users
-
-# CPU support.  At least one is REQUIRED.
-options 	I386_CPU
-options 	I486_CPU
-options 	I586_CPU
-options 	I686_CPU
 
 # Performance tweaking
 options         SB_MAX=1048576          # maximum socket buffer size
@@ -41,11 +35,7 @@ options         NMBCLUSTERS=25600       # maximum number of mbuf clusters
 # AMD Elan SC520's timer runs at a different frequency
 options 	TIMER_FREQ=1189200
 
-makeoptions	COPTS="-Os -mcpu=i486"
-options 	VNODE_OP_NOINLINE
-
-# eliminate delay no-ops in I/O; recommended on all but very old machines
-options         DUMMY_NOPS
+makeoptions	COPTS="-Os -march=i486"
 
 # CPU-related options.
 #options 	MATH_EMULATE	# floating point emulation
@@ -199,7 +189,7 @@ file-system     TMPFS           # Efficient memory file-system
 options 	GATEWAY		# packet forwarding
 options 	INET		# IP + ICMP + TCP + UDP
 options 	INET6		# IPV6
-options 	FAST_IPSEC
+options 	IPSEC		# IP security
 options 	MROUTING	# IP multicast routing
 #options 	NS		# XNS
 #options 	NSIP		# XNS tunneling over IP
@@ -210,7 +200,6 @@ options 	MROUTING	# IP multicast routing
 options 	PPP_BSDCOMP	# BSD-Compress compression support for PPP
 options 	PPP_DEFLATE	# Deflate compression support for PPP
 options 	PPP_FILTER	# Active filter support for PPP (requires bpf)
-options 	PFIL_HOOKS	# pfil(9) packet filter hooks
 #options 	IPFILTER_LOG	# ipmon(8) log support
 #options 	TCP_DEBUG	# Record last TCP_NDEBUG packets with SO_DEBUG
 
@@ -254,6 +243,7 @@ cpu0 	at mainbus0
 # PCI bus support
 pci*	at mainbus? bus ?
 pci*    at pchb? bus ?
+pci*    at elansc? bus ?
 pci*    at ppb? bus ?
 
 # Configure PCI using BIOS information
@@ -269,7 +259,7 @@ pci*    at ppb? bus ?
 # PCI bridges
 ichlpcib* at pci? dev ? function ?     # Intel ICH PCI-ISA w/ watchdog and
                                         # SpeedStep support
-elansc*	at pci? dev ? function ?	# Elan SC520 System Controller
+elansc*	at mainbus? bus ?		# Elan SC520 System Controller
 pchb*   at pci? dev ? function ?        # PCI-Host bridges
 pceb*   at pci? dev ? function ?        # PCI-EISA bridges
 pcib*   at pci? dev ? function ?        # PCI-ISA bridges
@@ -309,9 +299,6 @@ tlp*   at cardbus? function ?  # DECchip 21143
 ral*   at cardbus? function ?  # Ralink RT2500
 
 # Coprocessor Support
-
-# Math Coprocessor support
-npx0	at isa? port 0xf0 irq 13	# x86 math coprocessor
 
 # ISA serial interfaces
 com0	at isa? port 0x3f8 irq 4	# Standard PC serial ports
@@ -393,7 +380,8 @@ ugen*   at uhub? port ?
 
 # USB Mass Storage
 umass*  at uhub? port ? configuration ? interface ?
-wd*     at umass?
+scsibus* at umass?
+sd*     at scsibus? target ? lun ?     # USB disks
 
 # Network Interfaces
 
@@ -408,7 +396,7 @@ url*    at uhub? port ?         # Realtek RTL8150L based adapters
 
 # USB 802.11b adapters
 atu*    at uhub? port ?         # Atmel AT76C50XX based adapters
-ral*	at uhub? port ?		# RT2500USB chipset
+ural*	at uhub? port ?		# Ralink RT2500USB
 
 # PCI network interfaces
 # Wireless:
@@ -422,17 +410,12 @@ ral*    at pci? dev ? function ?    	# Ralink RT2500
 atw*    at pci? dev ? function ?        # ADMtek ADM8211 (802.11)
 bce*    at pci? dev ? function ?        # Broadcom 4401 10/100 Ethernet
 bge*    at pci? dev ? function ?        # Broadcom 570x gigabit Ethernet
-en*     at pci? dev ? function ?        # ENI/Adaptec ATM
 ep*     at pci? dev ? function ?        # 3Com 3c59x
 epic*   at pci? dev ? function ?        # SMC EPIC/100 Ethernet
-esh*    at pci? dev ? function ?        # Essential HIPPI card
 ex*     at pci? dev ? function ?        # 3Com 90x[BC]
-fpa*    at pci? dev ? function ?        # DEC DEFPA FDDI
 fxp*    at pci? dev ? function ?        # Intel EtherExpress PRO 10+/100B
 gsip*   at pci? dev ? function ?        # NS83820 Gigabit Ethernet
 hme*    at pci? dev ? function ?        # Sun Microelectronics STP2002-STQ
-le*     at pci? dev ? function ?        # PCnet-PCI Ethernet
-lmc*    at pci? dev ? function ?        # Lan Media Corp SSI/HSSI/DS3
 mtd*    at pci? dev ? function ?        # Myson MTD803 3-in-1 Ethernet
 ne*     at pci? dev ? function ?        # NE2000-compatible Ethernet
 ntwoc*  at pci? dev ? function ?        # Riscom/N2 PCI Sync Serial
@@ -523,8 +506,7 @@ pseudo-device	gre		2	# generic L3 over IP tunnel
 pseudo-device	vlan			# IEEE 802.1q encapsulation
 pseudo-device	bridge			# simple inter-network bridging
 #options 	BRIDGE_IPF		# bridge uses IP/IPv6 pfil hooks too
-pseudo-device   pf                      # PF packet filter
-pseudo-device   pflog                   # PF log if
+pseudo-device	npf			# NPF packet filter
 options         PPPOE_SERVER		# PPPoE server
 
 # miscellaneous pseudo-devices
