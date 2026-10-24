@@ -84,10 +84,12 @@ f 0555 root:wheel sbin/mount_kernfs
 f 0555 root:wheel sbin/mount_mfs
 f 0555 root:wheel sbin/mount_procfs
 f 0555 root:wheel sbin/mount_tmpfs
+f 0555 root:wheel sbin/npfctl
 f 0555 root:wheel sbin/wsconsctl
 f 0555 root:wheel usr/bin/find
 f 0555 root:wheel usr/bin/gzip
 f 0555 root:wheel usr/bin/tput
+f 0555 root:wheel usr/sbin/npfd
 f 0555 root:wheel usr/sbin/pwd_mkdb
 s 0777 root:wheel usr/libexec/ld.elf_so=../../libexec/ld.elf_so
 s 0777 root:wheel usr/lib/libc.so=../../lib/libc.so.12.163

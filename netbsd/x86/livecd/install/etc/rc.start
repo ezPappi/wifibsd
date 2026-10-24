@@ -76,7 +76,7 @@ chose_type(){
 	#pkill -9 getty && /usr/libexec/getty Pc ttyE1 &
 	
 for x in "/var/db" "/var/run" "/var/tmp/vi.recover" \
-	"/var/log" "/var/chroot/sshd" "/var/chroot/pflogd" ; do
+	"/var/log" "/var/chroot/sshd" ; do
 
 	if [ ! -d $x ]; then
 	 	mkdir -p $x
@@ -86,7 +86,7 @@ done
 for y in "/var/db/dhcpd.leases" "/var/log/all" \
 	"/var/log/authlog" "/var/log/lastlog" \
 	"/var/log/messages" "/var/run/utmp" \
-	"/var/run/syslogd.sockets" "/var/run/pflogd.pid" \
+	"/var/run/syslogd.sockets" "/var/run/npfd.pid" \
 	"/var/run/dhclient.pid" "/var/run/utmpx" "/var/run/utmp"
 do
 	if [ ! -f $y ]; then
@@ -106,8 +106,8 @@ ifconfig lo0 127.0.0.1
 
 showmsg "Starting services..."
 
-for z in "/etc/rc.d/010.devdb.run" "/etc/rc.d/010.pf.run" \
-	"/etc/rc.d/010.syslogd.run" "/etc/rc.d/015.pflogd.run" \
+for z in "/etc/rc.d/010.devdb.run" "/etc/rc.d/010.npf.run" \
+	"/etc/rc.d/010.syslogd.run" "/etc/rc.d/015.npfd.run" \
 	"/etc/rc.d/020.sshd.run" "/etc/rc.d/020.wscons.run" \
 	"/etc/rc.d/030.mini_httpd.run"
 do

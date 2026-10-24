@@ -1,0 +1,21 @@
+#!/bin/sh
+
+name="npfd"
+command="/usr/sbin/${name}"
+log_file="/var/log/npflog0.pcap"
+
+npfd_check()
+{
+	(
+	umask 022
+	if [ -x ${command} ]; then
+		${command} -f ${log_file}
+	else
+		echo "npfd binary is unavaliable!"
+		echo "The ${name} did not start."
+	fi
+	)
+}
+
+echo "Starting npfd..."
+npfd_check

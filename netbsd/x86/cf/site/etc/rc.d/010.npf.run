@@ -1,0 +1,19 @@
+#!/bin/sh
+
+name="npf"
+npf_rules="/etc/npf.conf"
+
+npf_ride()
+{
+	cd /dev/ ; ./MAKEDEV npf
+	/sbin/npfctl flush > /dev/null 2>&1
+
+	if /sbin/npfctl reload ${npf_rules} ; then
+		/sbin/npfctl start
+	else
+		echo "${npf_rules} failed to load, firewalling NOT enabled!"
+	fi
+}
+
+echo "Enabling firewalling..."
+npf_ride

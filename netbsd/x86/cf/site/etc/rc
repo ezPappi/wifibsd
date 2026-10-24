@@ -58,7 +58,7 @@ disk_check()
 if [ -d /var ]; then
 
 	for x in "/var/db" "/var/run" "/var/tmp/vi.recover" "/var/log/wtmp" \
-		"/var/chroot/sshd" "/var/chroot/pflogd" "/var/cron/tabs" "/var/spool/lock"
+		"/var/chroot/sshd" "/var/cron/tabs" "/var/spool/lock"
 	do
         	if [ ! -d $x ]; then
                 	mkdir -p $x
@@ -71,7 +71,7 @@ if [ -d /var ]; then
 	for y in "/var/db/dhcpd.leases" "/var/log/all" "/var/log/authlog" \
          	"/var/log/lastlog" "/var/log/messages" "/var/run/utmp" \
 		"/var/log/dnsmasq.log" "/var/log/sshd.log" "/var/log/firewall.log" \
-         	"/var/run/syslogd.sockets" "/var/run/pflogd.pid" "/var/run/dhclient.pid" \
+         	"/var/run/syslogd.sockets" "/var/run/npfd.pid" "/var/run/dhclient.pid" \
          	"/var/run/utmpx" "/var/run/utmp"
 	do
         	if [ ! -f $y ]; then
